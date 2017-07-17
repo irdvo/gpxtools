@@ -1,6 +1,8 @@
 # gpxtools
 A collection of c++ tools for using GPX files 
 
+## gpxls
+
 A c++ tool for showing a summary of the contents of a GPX file
 
 Syntax:
