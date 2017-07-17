@@ -115,7 +115,10 @@ void XMLParser::stopExpat()
 
 void XMLParser::xmlDeclHandler(void *userData, const XML_Char *version, const XML_Char *encoding, int standalone)
 {
-  static_cast<XMLParser*>(userData)->xmlDecl(std::string(version), std::string(encoding), standalone);
+
+  static_cast<XMLParser*>(userData)->xmlDecl(version != 0 ? std::string(version) : std::string(),
+                                             encoding != 0 ? std::string(encoding) : std::string(),
+                                             standalone);
 }
 
 void XMLParser::startElementHandler(void *userData, const XML_Char *name, const XML_Char **atts)
