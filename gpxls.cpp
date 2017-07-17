@@ -56,16 +56,17 @@ public:
 
     if (mode == FULL && !_waypoints.empty())
     {
-      std::cout << "    Waypoint  Latitude   Longitude Time                     Elevation" << std::setprecision(5) << std::fixed << std::endl;
+      std::cout << "    Waypoint     Latitude  Longitude Time                    Elevation" << std::fixed << std::endl;
 
       for (auto iter = _waypoints.begin(); iter != _waypoints.end(); ++iter)
       {
-        std::cout << "    "
-                  << std::left << std::setw(10) << iter->_name << std::right
-                  << std::setw(10) << iter->_lat
-                  << std::setw(10) << iter->_lon
-                  << ' ' << std::left << std::setw(24) << iter->_time << std::right
-                  << std::setw(10) << iter->_ele << std::endl;
+        std::cout << "    ";
+        report(iter->_name, 10);
+        report(iter->_lat, 10, 5);
+        report(iter->_lon, 10, 5);
+        report(iter->_time, 24);
+        report(iter->_ele, 8, 3);
+        std::cout  << std::endl;
       }
     }
 
@@ -76,18 +77,19 @@ public:
 
       if (mode == FULL && !iter->_points.empty())
       {
-        std::cout << "      Latitude   Longitude" << std::setprecision(5) << std::fixed << std::endl;
+        std::cout << "        Latitude  Longitude" << std::fixed << std::endl;
 
         for (auto iter2 = iter->_points.begin(); iter2 != iter->_points.end(); ++iter2)
         {
-          std::cout << "      "
-                    << std::setw(10) << iter2->_lat
-                    << std::setw(10) << iter2->_lon << std::endl;
+          std::cout << "      ";
+          report(iter2->_lat, 10, 5);
+          report(iter2->_lon, 10, 5);
+          std::cout << std::endl;
         }
       }
     }
 
-    std::cout << "  Tracks:   " << _tracks.size() << std::endl;
+    std::cout << "  Tracks:    " << _tracks.size() << std::endl;
     for (auto iter = _tracks.begin(); iter != _tracks.end(); ++iter)
     {
       std::cout << "    Track: '" << iter->_name << "' Segments: " << iter->_segments.size() << std::endl;
@@ -95,19 +97,26 @@ public:
       int i = 1;
       for (auto iter2 = iter->_segments.begin(); iter2 != iter->_segments.end(); ++iter2, i++)
       {
-        std::cout << "      Segment: " << i << " Points: " << iter2->_points.size() << std::endl;
+        std::cout << "      Segment: " << std::setw(2) << i << " Points: " << std::setw(4) << iter2->_points.size();
+
+        if (!iter2->_minTime.empty() && !iter2->_maxTime.empty())
+        {
+          std::cout << " Bounds: " << iter2->_minTime << "..." << iter2->_maxTime;
+        }
+        std::cout << std::endl;
 
         if (mode == FULL && !iter2->_points.empty())
         {
-          std::cout << "        Latitude   Longitude Time                     Elevation" << std::setprecision(5) << std::fixed << std::endl;
+          std::cout << "          Latitude  Longitude Time                    Elevation" << std::fixed << std::endl;
 
           for (auto iter3 = iter2->_points.begin(); iter3 != iter2->_points.end(); ++iter3)
           {
-            std::cout << "        "
-                      << std::setw(10) << iter3->_lat
-                      << std::setw(10) << iter3->_lon
-                      << ' ' << std::left << std::setw(24) << iter3->_time << std::right
-                      << std::setw(10) << iter3->_ele << std::endl;
+            std::cout << "        ";
+            report(iter3->_lat, 10, 5);
+            report(iter3->_lon, 10, 5);
+            report(iter3->_time, 24);
+            report(iter3->_ele, 8, 3);
+            std::cout << std::endl;
           }
         }
       }
@@ -217,6 +226,12 @@ public:
     }
     else if (_path == "/gpx/trk/trkseg/trkpt")
     {
+      if (_trackpoint._time.size() >= 18)
+      {
+        if (_trackSegment._minTime.empty() || _trackSegment._minTime > _trackpoint._time) _trackSegment._minTime = _trackpoint._time;
+        if (_trackSegment._maxTime.empty() || _trackSegment._maxTime < _trackpoint._time) _trackSegment._maxTime = _trackpoint._time;
+      }
+
       _trackSegment._points.push_back(_trackpoint);
     }
 
@@ -242,6 +257,34 @@ private:
     auto iter = atts.find(key);
 
     return iter != atts.end() ? getDouble(iter->second) : std::numeric_limits<double>::min();
+  }
+
+  void report(double value, int width, int precision)
+  {
+    if (value == std::numeric_limits<double>::min())
+    {
+      std::cout << std::setw(width) << ' ';
+    }
+    else
+    {
+      std::cout << std::setw(width) << std::setprecision(precision) << value;
+    }
+    std::cout << ' ';
+  }
+
+  void report(const std::string &value, size_t width)
+  {
+    std::cout << std::left;
+    if (value.size() > width)
+    {
+      std::cout << value.substr(0, width-3) << "...";
+    }
+    else
+    {
+      std::cout << std::setw(width) << value;
+    }
+    std::cout << ' ';
+    std::cout << std::right;
   }
 
   // Members
@@ -317,9 +360,13 @@ private:
   {
     void reset()
     {
+      _minTime.clear();
+      _maxTime.clear();
       _points.clear();
     }
 
+    std::string           _minTime;
+    std::string           _maxTime;
     std::list<Trackpoint> _points;
   };
   TrackSegment _trackSegment;
