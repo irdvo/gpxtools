@@ -397,7 +397,7 @@ int main(int argc, char *argv[])
   {
     if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "-?") == 0)
     {
-      std::cout << "Usage: gpxls [-H] [-V] [-s] [-f] <file.gpx> .." << std::endl;
+      std::cout << "Usage: gpxls [-h] [-v] [-s] [-f] <file.gpx> .." << std::endl;
       std::cout << "  -h           help" << std::endl;
       std::cout << "  -v           show version" << std::endl;
       std::cout << "  -s           show summary (default)" << std::endl;
