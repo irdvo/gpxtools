@@ -28,7 +28,6 @@ Examples:
 
 Requirements:
   * [cmake](https://cmake.org/) for building
-  * [expat](https://libexpat.github.io/)
 
 ---
 

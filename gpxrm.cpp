@@ -9,11 +9,16 @@
 
 // ----------------------------------------------------------------------------
 
-class GpxRm : public XMLParser
+class GpxRm : public XMLParserHandler
 {
 public:
   // Constructor
-  GpxRm()
+  GpxRm() :
+    _inWaypoint(false),
+    _inRoute(false),
+    _inTrack(false),
+    _inSegment(false),
+    _segmentNr(0)
   {
   }
 
@@ -49,94 +54,164 @@ public:
 
     std::cout << name << ":" << std::endl;
 
-    parse(stream);
+    XMLParser parser(this);
+
+    parser.parse(stream);
 
     stream.close();
 
     return true;
   }
 
-
-  // Callbacks
-  virtual void parseError(const std::string &text, int lineNumber, int columnNumber)
+  void log(const std::string &text)
   {
-    std::cerr << "  XML parser reports '" << text << "' on line " << lineNumber << ", column " << columnNumber << std::endl;
+    if (_inWaypoint || _inRoute || _inTrack || _inSegment)
+    {
+      _currentText.append(text);
+    }
+    else
+    {
+      std::cout << text;
+    }
   }
 
-  virtual void startElement(const std::string &name, const Attributes &atts)
+  // Callbacks
+  virtual void xmlDecl(const std::string &text, const Attributes &)
+  {
+    log(text);
+  }
+
+  virtual void processingInstruction(const std::string &text, const std::string &, const std::string &)
+  {
+    log(text);
+  }
+
+  virtual void docTypeDecl(const std::string &text)
+  {
+    log(text);
+  }
+
+  virtual void unhandled(const std::string &text, int lineNumber, int columnNumber)
+  {
+    std::cerr << "  ERROR: Unexpected gpx info: " << text <<  " on line: " << lineNumber << " columnNumber: " << columnNumber << std::endl;
+    exit(1);
+  }
+
+  virtual void cdataDecl(const std::string &text, const std::string &)
+  {
+    log(text);
+  }
+
+  virtual void comment(const std::string &text, const std::string &)
+  {
+    log(text);
+  }
+
+  virtual void startEndElement(const std::string &text, const std::string &name, const Attributes &attributes)
+  {
+    startElement(text, name, attributes);
+    endElement(text, name);
+  }
+
+
+  virtual void startElement(const std::string &text, const std::string &name, const Attributes &atts)
   {
     _path.append("/");
     _path.append(name);
 
     if (_path == "/gpx/wpt")
     {
+      if (!_waypointName.empty()) _inWaypoint = true;
+
+      _currentText.clear();
+      _currentName.clear();
+
+      _currentSegmentNr = 0;
     }
     else if (_path == "/gpx/rte")
     {
-    }
-    else if (_path == "/gpx/rte/rtept")
-    {
+      if (!_routeName.empty()) _inRoute = true;
+
+      _currentText.clear();
+      _currentName.clear();
+
+      _currentSegmentNr = 0;
     }
     else if (_path == "/gpx/trk")
     {
+      if (!_trackName.empty() && _segmentNr == 0) _inTrack = true;
+
+      _currentText.clear();
+      _currentName.clear();
+
+      _currentSegmentNr = 0;
     }
     else if (_path == "/gpx/trk/trkseg")
     {
+      _currentSegmentNr++;
+
+      if (_segmentNr != 0 && _segmentNr == _currentSegmentNr)
+      {
+        _currentText.clear();
+
+        _inSegment = true;
+      }
     }
-    else if (_path == "/gpx/trk/trkseg/trkpt")
-    {
-    }
+
+    log(text);
   }
 
-  virtual void characterData(const std::string &data)
+  virtual void text(const std::string &text)
   {
     if (_path == "/gpx/wpt/name")
     {
-    }
-    else if (_path == "/gpx/wpt/ele")
-    {
-    }
-    else if (_path == "/gpx/wpt/time")
-    {
+      _currentName = text;
     }
     else if (_path == "/gpx/rte/name")
     {
+      _currentName = text;
     }
     else if (_path == "/gpx/trk/name")
     {
+      _currentName = text;
     }
-    else if (_path == "/gpx/trk/trkseg/trkpt/ele")
-    {
-    }
-    else if (_path == "/gpx/trk/trkseg/trkpt/time")
-    {
-    }
+
+    log(text);
   }
 
-  virtual void endElement(const std::string &)
+  virtual void endElement(const std::string &text, const std::string &)
   {
+    log(text);
+
     if (_path == "/gpx/wpt")
     {
-    }
-    else if (_path == "/gpx/rte/rtept")
-    {
+      if (_inWaypoint && _currentName != _waypointName) std::cout << _currentText;
+
+      _inWaypoint = false;
     }
     else if (_path == "/gpx/rte")
     {
+      if (_inRoute && _currentName != _routeName) std::cout << _currentText;
+
+      _inRoute = false;
     }
     else if (_path == "/gpx/trk")
     {
+      if (_inTrack && _currentName != _trackName) std::cout << _currentText;
+
+      _inTrack = false;
     }
     else if (_path == "/gpx/trk/trkseg")
     {
-    }
-    else if (_path == "/gpx/trk/trkseg/trkpt")
-    {
+      if (_inSegment && _currentName != _trackName) std::cout << _currentText;
+
+      _inSegment = false;
     }
 
     size_t i;
     if ((i = _path.find_last_of('/')) != std::string::npos) _path.erase(i);
   }
+
 
 private:
   // Members
@@ -147,6 +222,16 @@ private:
   std::string   _routeName;
 
   std::string   _path;
+
+  bool          _inWaypoint;
+  bool          _inRoute;
+  bool          _inTrack;
+  std::string   _currentText;
+  std::string   _currentName;
+
+  bool          _inSegment;
+  int           _currentSegmentNr;
+  std::string   _currentSegmentText;
 };
 
 // -- Main program ------------------------------------------------------------
@@ -187,7 +272,7 @@ int main(int argc, char *argv[])
     }
     else if (strcmp(argv[i], "-s") == 0 && i < argc)
     {
-      if (gpxrm.waypointName().empty())
+      if (gpxrm.trackName().empty())
       {
         std::cerr << "Error: segment number without track filter" << std::endl;
         return 1;

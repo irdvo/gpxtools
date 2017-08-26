@@ -9,10 +9,10 @@
 
 // ----------------------------------------------------------------------------
 
-class GpxLs : public XMLParser
+class GpxLs : public XMLParserHandler
 {
 public:
-  // Constructor
+  // -- Constructor -----------------------------------------------------------
   GpxLs() :
     _waypoints(),
     _routes(),
@@ -21,15 +21,15 @@ public:
 
   }
 
-  // Deconstructor
+  // -- Deconstructor----------------------------------------------------------
   virtual ~GpxLs()
   {
 
   }
 
-  // Properties
+  // -- Properties ------------------------------------------------------------
 
-  // Parse a file
+  // -- Parse a file ----------------------------------------------------------
   bool parseFile(const std::string &name)
   {
     std::ifstream stream(name.c_str());
@@ -40,14 +40,18 @@ public:
 
     std::cout << name << ":" << std::endl;
 
-    parse(stream);
+    XMLParser parser;
+
+    parser.setHandler(this);
+
+    parser.parse(stream);
 
     stream.close();
 
     return true;
   }
 
-  // Output the result
+  // -- Output the result -----------------------------------------------------
   enum Mode { SUMMARY, FULL };
 
   void report(Mode mode)
@@ -61,10 +65,10 @@ public:
       for (auto iter = _waypoints.begin(); iter != _waypoints.end(); ++iter)
       {
         std::cout << "    ";
-        report(iter->_name, 10);
+        report(XMLParser::trim(iter->_name), 10);
         report(iter->_lat, 10, 5);
         report(iter->_lon, 10, 5);
-        report(iter->_time, 24);
+        report(XMLParser::trim(iter->_time), 24);
         report(iter->_ele, 8, 3);
         std::cout  << std::endl;
       }
@@ -114,7 +118,7 @@ public:
             std::cout << "        ";
             report(iter3->_lat, 10, 5);
             report(iter3->_lon, 10, 5);
-            report(iter3->_time, 24);
+            report(XMLParser::trim(iter3->_time), 24);
             report(iter3->_ele, 8, 3);
             std::cout << std::endl;
           }
@@ -124,13 +128,46 @@ public:
   }
 
 
-  // Callbacks
-  virtual void parseError(const std::string &text, int lineNumber, int columnNumber)
+  // -- Callbacks -------------------------------------------------------------
+  virtual void xmlDecl(const std::string &, const Attributes &)
   {
-    std::cerr << "  XML parser reports '" << text << "' on line " << lineNumber << ", column " << columnNumber << std::endl;
+    // Skipping
   }
 
-  virtual void startElement(const std::string &name, const Attributes &atts)
+  virtual void processingInstruction(const std::string &, const std::string &, const std::string &)
+  {
+    // Skipping
+  }
+
+  virtual void docTypeDecl(const std::string &)
+  {
+    // Skipping
+  }
+
+  virtual void unhandled(const std::string &text, int lineNumber, int columnNumber)
+  {
+    std::cerr << "  ERROR: Unexpected gpx info: " << text <<  " on line: " << lineNumber << " columnNumber: " << columnNumber << std::endl;
+    exit(1);
+  }
+
+  virtual void cdataDecl(const std::string &, const std::string &)
+  {
+    // Skipping
+  }
+
+  virtual void comment(const std::string &, const std::string &)
+  {
+    // Skipping
+  }
+
+  virtual void startEndElement(const std::string &text, const std::string &name, const Attributes &attributes)
+  {
+    startElement(text, name, attributes);
+    endElement(text, name);
+  }
+
+
+  virtual void startElement(const std::string &, const std::string &name, const Attributes &atts)
   {
     _path.append("/");
     _path.append(name);
@@ -170,39 +207,39 @@ public:
     }
   }
 
-  virtual void characterData(const std::string &data)
+  virtual void text(const std::string &text)
   {
     if (_path == "/gpx/wpt/name")
     {
-      _waypoint._name.append(data);
+      _waypoint._name = text;
     }
     else if (_path == "/gpx/wpt/ele")
     {
-      _waypoint._ele = getDouble(data);
+      _waypoint._ele = getDouble(text);
     }
     else if (_path == "/gpx/wpt/time")
     {
-      _waypoint._time.append(data);
+      _waypoint._time = text;
     }
     else if (_path == "/gpx/rte/name")
     {
-      _route._name.append(data);
+      _route._name = text;
     }
     else if (_path == "/gpx/trk/name")
     {
-      _track._name.append(data);
+      _track._name = text;
     }
     else if (_path == "/gpx/trk/trkseg/trkpt/ele")
     {
-      _trackpoint._ele = getDouble(data);
+      _trackpoint._ele = getDouble(text);
     }
     else if (_path == "/gpx/trk/trkseg/trkpt/time")
     {
-      _trackpoint._time.append(data);
+      _trackpoint._time = text;
     }
   }
 
-  virtual void endElement(const std::string &)
+  virtual void endElement(const std::string &, const std::string &)
   {
     if (_path == "/gpx/wpt")
     {
@@ -239,7 +276,9 @@ public:
     if ((i = _path.find_last_of('/')) != std::string::npos) _path.erase(i);
   }
 
+// -- Privates ----------------------------------------------------------------
 private:
+
   double getDouble(const std::string &value)
   {
     try
@@ -287,7 +326,7 @@ private:
     std::cout << std::right;
   }
 
-  // Members
+  // -- Members ---------------------------------------------------------------
   std::string   _path;
 
   struct Waypoint

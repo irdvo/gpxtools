@@ -27,8 +27,30 @@
 #include <iostream>
 #include <map>
 
-#include "expat.h"
+///
+/// @class XMLParserHandler
+///
+/// @brief The xml parser handler class.
+///
+class XMLParserHandler
+{
+public:
+  XMLParserHandler() {}
+  virtual ~XMLParserHandler() {}
 
+  typedef std::map<std::string, std::string> Attributes;
+
+  virtual void xmlDecl(const std::string &text, const Attributes &attributes) = 0;
+  virtual void processingInstruction(const std::string &text, const std::string &target, const std::string &value) = 0;
+  virtual void docTypeDecl(const std::string &text) = 0;
+  virtual void comment(const std::string &text, const std::string &comment) = 0;
+  virtual void startElement(const std::string &text, const std::string &name, const Attributes &attributes) = 0;
+  virtual void endElement(const std::string &text, const std::string &name) = 0;
+  virtual void startEndElement(const std::string &text, const std::string &name, const Attributes &attributes) = 0;
+  virtual void text(const std::string &text) = 0;
+  virtual void cdataDecl(const std::string &text, const std::string &data) = 0;
+  virtual void unhandled(const std::string &text, int lineNumber, int columnNumber) = 0;
+};
 
 ///
 /// @class XMLParser
@@ -45,6 +67,13 @@ public:
   XMLParser();
 
   ///
+  /// Constructor
+  ///
+  /// @param handler     the XMLParser handler
+  ///
+  XMLParser(XMLParserHandler *handler);
+
+  ///
   /// Deconstructor
   ///
   virtual ~XMLParser();
@@ -52,25 +81,25 @@ public:
   // Properties
 
   ///
-  /// Get the last error text
+  /// Set the XMLParser handler
   ///
-  /// @return the last error text
+  /// @param handler     the XMLParser handler
   ///
-  const std::string &errorText() const { return _errorText; }
+  void setHandler(XMLParserHandler *handler) { _handler = handler; }
 
   ///
-  /// Get the last error line number
+  /// Get the current line number
   ///
-  /// @return the last error line number
+  /// @return the current line number
   ///
-  int errorLineNumber() const { return _errorLineNumber; }
+  int lineNumber() const { return _lineNumber; }
 
   ///
-  /// Get the last error column number
+  /// Get the current column number
   ///
-  /// @return the last error column number
+  /// @return the current column number
   ///
-  int errorColumnNumber() const { return _errorColumnNumber; }
+  int columnNumber() const { return _columnNumber; }
 
   // Parsing methods
 
@@ -114,52 +143,116 @@ public:
   ///
   bool parse(std::istream &stream);
 
-  // Interface
-  typedef std::map<std::string, std::string> Attributes;
 
-  virtual void parseError(const std::string &text, int lineNumber, int columnNumber) { }
-  virtual void xmlDecl(const std::string &version, const std::string &encoding, int standalone) { }
-  virtual void startElement(const std::string &name, const Attributes &atts) { }
-  virtual void endElement(const std::string &name) { }
-  virtual void characterData(const std::string &data) { }
-  virtual void comment(const std::string &data) { }
-  virtual void processingInstruction(const std::string &target, const std::string &data) { }
-  virtual void startCDATASection() { }
-  virtual void endCDATASection() { }
-  virtual void unspecified(const std::string &data) { }
-  virtual void startNamespaceDecl(const std::string &prefix, const std::string &uri) { }
-  virtual void endNamespaceDecl(const std::string &prefix) { }
+  ///
+  /// Trim the text from whitespace
+  ///
+  /// @param  text         the text
+  ///
+  /// @return the text without whitespace
+  ///
+  static std::string trim(const std::string &text);
+
+  ///
+  /// Translate an entity reference in the text
+  ///
+  /// @param text          the text
+  /// @param pattern       the entity reference (example: &amp;)
+  /// @param replace       the replacement (example: &)
+  ///
+  static void translateEntityRef(std::string &text, const std::string &pattern, const std::string &replace);
+
+  ///
+  /// Translate the entity references: &lt; &gt; &apos; &quot; &amp;
+  ///
+  /// @param text          the text
+  ///
+  /// @return the text with the translated entity refs
+  ///
+  static std::string translateEntityRefs(const std::string &text);
 
 private:
+  // Types
+  enum State
+  {
+    TEXT,
+    MARKUP,
+    COMMENT,
+    PI,
+    ELEMENT
+  };
+  void setState(State state);
 
-  // Start using expat
-  void startExpat();
+  enum Result
+  {
+    ERROR,
+    MORE,
+    OK,
+    FAIL
+  };
 
-  // Stop using expat
-  void stopExpat();
+  // String parsing
 
-  // Statics for expat
-  static void xmlDeclHandler              (void *userData, const XML_Char *version, const XML_Char *encoding, int standalone);
-  static void startElementHandler         (void *userData, const XML_Char *name,    const XML_Char **atts);
-  static void endElementHandler           (void *userData, const XML_Char *name);
-  static void characterDataHandler        (void *userData, const XML_Char *s, int len);
-  static void commentHandler              (void *userData, const XML_Char *data);
-  static void processingInstructionHandler(void *userData, const XML_Char *target, const XML_Char *data);
-  static void startCdataSectionHandler    (void *userData);
-  static void endCdataSectionHandler      (void *userData);
-  static void defaultHandler              (void *userData, const XML_Char *s, int len);
-  static void startNamespaceDeclHandler   (void *userData, const XML_Char *prefix, const XML_Char *uri);
-  static void endNamespaceDeclHandler     (void *userData, const XML_Char *prefix);
+  char hasChar(const std::string &in, std::string::size_type &i);
+
+  char hasChar(const std::string &in, std::string::size_type &i, std::string &out, std::string::size_type j);
+
+  static bool isInChars(char ch, const std::string &chars);
+
+  // XML Parsing
+  Result parseText(const std::string &in, std::string::size_type &i);
+  Result parseMarkup(const std::string &in, std::string::size_type &i);
+
+  Result parseDeclaration(const std::string &in, std::string::size_type &i);
+  Result parseSection(const std::string &in, std::string::size_type &i);
+  Result parseElement(const std::string &in, std::string::size_type &i);
+  Result parseAttribute(const std::string &pattern,
+                        const std::string &in,  std::string::size_type &i,
+                              std::string &out, std::string::size_type &j,
+                              std::string &key, std::string &value);
+  Result doUnhandled();
+
+  Result matchChar(const std::string &chars,
+                   const std::string &in, std::string::size_type &i,
+                         std::string &out, std::string::size_type &j);
+  Result matchNotChar(const std::string &chars,
+                      const std::string &in, std::string::size_type &i,
+                            std::string &out, std::string::size_type &j);
+  Result matchString(const std::string &pattern,
+                     const std::string &in, std::string::size_type &i,
+                           std::string &out, std::string::size_type &j);
+  Result matchChars(const std::string &chars,
+                    const std::string &in, std::string::size_type &i,
+                    std::string &out, std::string::size_type &j);
+  Result matchNotChars(const std::string &chars,
+                       const std::string &in, std::string::size_type &i,
+                       std::string &out, std::string::size_type &j);
+  Result skipTillString(const std::string &pattern,
+                         const std::string &in, std::string::size_type &i,
+                               std::string &out, std::string::size_type &j,
+                               std::string &text);
+  Result skipTillNotChar(const std::string &chars,
+                          const std::string &in, std::string::size_type &i,
+                                std::string &out, std::string::size_type &j,
+                                std::string &text);
+  Result skipTillChar(const std::string &chars,
+                       const std::string &in, std::string::size_type &i,
+                             std::string &out, std::string::size_type &j,
+                             std::string &text);
 
   // Members
-  XML_Parser      _parser;
-  std::string     _errorText;
-  int             _errorLineNumber;
-  int             _errorColumnNumber;
+  XMLParserHandler *_handler;
+
+  State             _state;
+  std::string       _out;
+
+  int               _lineNumber;
+  int               _columnNumber;
 
   // Disable copy constructors
   XMLParser(const XMLParser &);
   XMLParser& operator=(const XMLParser &);
+
 };
 
 #endif
