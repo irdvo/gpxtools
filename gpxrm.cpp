@@ -1,9 +1,6 @@
 #include <iostream>
 #include <cstring>
 #include <fstream>
-#include <list>
-#include <limits>
-#include <iomanip>
 
 #include "XMLParser.h"
 
@@ -12,25 +9,23 @@
 class GpxRm : public XMLParserHandler
 {
 public:
-  // Constructor
+  // -- Constructor -----------------------------------------------------------
   GpxRm() :
+    _outputFile(&std::cout),
+    _segmentNr(0),
     _inWaypoint(false),
     _inRoute(false),
     _inTrack(false),
-    _inSegment(false),
-    _segmentNr(0)
+    _inSegment(false)
   {
   }
 
-  // Deconstructor
+  // -- Deconstructor ---------------------------------------------------------
   virtual ~GpxRm()
   {
   }
 
-  // Properties
-  void setOutputFilename(const std::string &name) { _outputFilename = name; }
-  const std::string &outputFilename() const { return _outputFilename; }
-
+  // -- Properties ------------------------------------------------------------
   void setWaypointName(const std::string &name) { _waypointName = name; }
   const std::string &waypointName() const { return _waypointName; }
 
@@ -43,22 +38,16 @@ public:
   void setRouteName(const std::string &name) { _routeName = name; }
   const std::string &routeName() const { return _routeName; }
 
-  // Parse a file
-  bool parseFile(const std::string &name)
+  // -- Parse a file ----------------------------------------------------------
+  bool parseFile(std::istream &input, std::ostream &output)
   {
-    std::ifstream stream(name.c_str());
-
-    if (!stream.is_open()) return false;
-
     _path.clear();
 
-    std::cout << name << ":" << std::endl;
+    _outputFile = &output;
 
     XMLParser parser(this);
 
-    parser.parse(stream);
-
-    stream.close();
+    parser.parse(input);
 
     return true;
   }
@@ -71,11 +60,11 @@ public:
     }
     else
     {
-      std::cout << text;
+      *_outputFile << text;
     }
   }
 
-  // Callbacks
+  // -- Callbacks -------------------------------------------------------------
   virtual void xmlDecl(const std::string &text, const Attributes &)
   {
     log(text);
@@ -113,8 +102,7 @@ public:
     endElement(text, name);
   }
 
-
-  virtual void startElement(const std::string &text, const std::string &name, const Attributes &atts)
+  virtual void startElement(const std::string &text, const std::string &name, const Attributes &)
   {
     _path.append("/");
     _path.append(name);
@@ -185,25 +173,25 @@ public:
 
     if (_path == "/gpx/wpt")
     {
-      if (_inWaypoint && _currentName != _waypointName) std::cout << _currentText;
+      if (_inWaypoint && _currentName != _waypointName) *_outputFile << _currentText;
 
       _inWaypoint = false;
     }
     else if (_path == "/gpx/rte")
     {
-      if (_inRoute && _currentName != _routeName) std::cout << _currentText;
+      if (_inRoute && _currentName != _routeName) *_outputFile << _currentText;
 
       _inRoute = false;
     }
     else if (_path == "/gpx/trk")
     {
-      if (_inTrack && _currentName != _trackName) std::cout << _currentText;
+      if (_inTrack && _currentName != _trackName) *_outputFile << _currentText;
 
       _inTrack = false;
     }
     else if (_path == "/gpx/trk/trkseg")
     {
-      if (_inSegment && _currentName != _trackName) std::cout << _currentText;
+      if (_inSegment && _currentName != _trackName) *_outputFile << _currentText;
 
       _inSegment = false;
     }
@@ -215,7 +203,7 @@ public:
 
 private:
   // Members
-  std::string   _outputFilename;
+  std::ostream *_outputFile;
   std::string   _waypointName;
   std::string   _trackName;
   int           _segmentNr; // 1..
@@ -240,20 +228,22 @@ int main(int argc, char *argv[])
 {
   GpxRm gpxrm;
 
+  std::string outputFilename;
+
   int i = 1;
   while (i < argc)
   {
     if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "-?") == 0)
     {
-      std::cout << "Usage: gpxrm [-h] [-v] [-w \"name\"] [-t \"<name>\" [-s <segment>]] [-r \"<name>\"] [-o <out.gpx>] <file.gpx>..." << std::endl;
-      std::cout << "  -h            help" << std::endl;
-      std::cout << "  -v            show version" << std::endl;
-      std::cout << "  -w \"name\"     remove the waypoint with <name>" << std::endl;
-      std::cout << "  -t \"<name>\"   remove the track with <name>" << std::endl;
-      std::cout << "  -s <segment>  remove only segment in track (1..)" << std::endl;
-      std::cout << "  -r \"<name>\"   remove the route with <name>" << std::endl;
-      std::cout << "  -o <out.gpx>  the output gpx file" << std::endl;
-      std::cout << " file.gpx...    the input gpx file" << std::endl << std::endl;
+      std::cout << "Usage: gpxrm [-h] [-v] [-w \"name\"] [-t \"<name>\" [-s <segment>]] [-r \"<name>\"] [-o <out.gpx>] <file.gpx>" << std::endl;
+      std::cout << "  -h              help" << std::endl;
+      std::cout << "  -v              show version" << std::endl;
+      std::cout << "  -w \"name\"       remove the waypoint with <name>" << std::endl;
+      std::cout << "  -t \"<name>\"     remove the track with <name>" << std::endl;
+      std::cout << "  -s <segment>    remove only segment in track (1..)" << std::endl;
+      std::cout << "  -r \"<name>\"     remove the route with <name>" << std::endl;
+      std::cout << "  -o <out.gpx>    the output gpx file (overwrites existing file)" << std::endl;
+      std::cout << " file.gpx         the input gpx file" << std::endl << std::endl;
       std::cout << "   Remove a waypoint, track or route from a gpx file" << std::endl;
       return 0;
     }
@@ -288,18 +278,51 @@ int main(int argc, char *argv[])
     }
     else if (strcmp(argv[i], "-o") == 0 && i < argc)
     {
-      gpxrm.setOutputFilename(argv[++i]);
+      if (outputFilename.empty())
+      {
+        outputFilename = argv[++i];
+      }
+      else
+      {
+        std::cerr << "Error: output file specified twice." << std::endl;
+        return 1;
+      }
     }
     else if (argv[i][0] != '-')
     {
-      if (!gpxrm.parseFile(argv[i]))
+      std::ifstream stream(argv[i]);
+
+      if (!stream.is_open())
       {
-        std::cerr << "Unable to open: " << argv[i] << std::endl;
+        std::cerr << "Error: unable to open: " << argv[i] << std::endl;
+        return 1;
       }
+
+      if (outputFilename.empty())
+      {
+        gpxrm.parseFile(stream, std::cout);
+      }
+      else
+      {
+        std::ofstream output(outputFilename.c_str());
+
+        if (output.is_open())
+        {
+          gpxrm.parseFile(stream, output);
+
+          output.close();
+        }
+        else
+        {
+          std::cerr << "Error: unable to open the outputfile: " << outputFilename << std::endl;
+          return 1;
+        }
+      }
+      break;
     }
     else
     {
-      std::cerr << "Unknown option:" << argv[i] << std::endl;
+      std::cerr << "Error: unknown option:" << argv[i] << std::endl;
       return 1;
     }
 

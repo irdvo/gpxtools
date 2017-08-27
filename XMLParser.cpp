@@ -20,8 +20,6 @@
 //
 // ==============================================================================
 
-#include <cstring>
-
 #include "XMLParser.h"
 
 XMLParser::XMLParser() :
