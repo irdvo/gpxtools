@@ -4,6 +4,7 @@
 
 #include "XMLParser.h"
 
+const std::string version= "0.1.0";
 // ----------------------------------------------------------------------------
 
 class GpxRm : public XMLParserHandler
@@ -52,6 +53,7 @@ public:
     return true;
   }
 
+private:
   void log(const std::string &text)
   {
     if (_inWaypoint || _inRoute || _inTrack || _inSegment)
@@ -64,45 +66,7 @@ public:
     }
   }
 
-  // -- Callbacks -------------------------------------------------------------
-  virtual void xmlDecl(const std::string &text, const Attributes &)
-  {
-    log(text);
-  }
-
-  virtual void processingInstruction(const std::string &text, const std::string &, const std::string &)
-  {
-    log(text);
-  }
-
-  virtual void docTypeDecl(const std::string &text)
-  {
-    log(text);
-  }
-
-  virtual void unhandled(const std::string &text, int lineNumber, int columnNumber)
-  {
-    std::cerr << "  ERROR: Unexpected gpx info: " << text <<  " on line: " << lineNumber << " columnNumber: " << columnNumber << std::endl;
-    exit(1);
-  }
-
-  virtual void cdataDecl(const std::string &text, const std::string &)
-  {
-    log(text);
-  }
-
-  virtual void comment(const std::string &text, const std::string &)
-  {
-    log(text);
-  }
-
-  virtual void startEndElement(const std::string &text, const std::string &name, const Attributes &attributes)
-  {
-    startElement(text, name, attributes);
-    endElement(text, name);
-  }
-
-  virtual void startElement(const std::string &text, const std::string &name, const Attributes &)
+  void doStartElement(const std::string &name)
   {
     _path.append("/");
     _path.append(name);
@@ -145,32 +109,10 @@ public:
         _inSegment = true;
       }
     }
-
-    log(text);
   }
 
-  virtual void text(const std::string &text)
+  void doEndElement()
   {
-    if (_path == "/gpx/wpt/name")
-    {
-      _currentName = text;
-    }
-    else if (_path == "/gpx/rte/name")
-    {
-      _currentName = text;
-    }
-    else if (_path == "/gpx/trk/name")
-    {
-      _currentName = text;
-    }
-
-    log(text);
-  }
-
-  virtual void endElement(const std::string &text, const std::string &)
-  {
-    log(text);
-
     if (_path == "/gpx/wpt")
     {
       if (_inWaypoint && _currentName != _waypointName) *_outputFile << _currentText;
@@ -196,8 +138,75 @@ public:
       _inSegment = false;
     }
 
-    size_t i;
-    if ((i = _path.find_last_of('/')) != std::string::npos) _path.erase(i);
+    size_t i =  _path.find_last_of('/');
+
+    if (i != std::string::npos) _path.erase(i);
+  }
+
+public:
+  // -- Callbacks -------------------------------------------------------------
+  virtual void xmlDecl(const std::string &text, const Attributes &)
+  {
+    log(text);
+  }
+
+  virtual void processingInstruction(const std::string &text, const std::string &, const std::string &)
+  {
+    log(text);
+  }
+
+  virtual void docTypeDecl(const std::string &text)
+  {
+    log(text);
+  }
+
+  virtual void unhandled(const std::string &text, int lineNumber, int columnNumber)
+  {
+    std::cerr << "  ERROR: Unexpected gpx info: " << text <<  " on line: " << lineNumber << " columnNumber: " << columnNumber << std::endl;
+    exit(1);
+  }
+
+  virtual void cdataDecl(const std::string &text, const std::string &)
+  {
+    log(text);
+  }
+
+  virtual void comment(const std::string &text, const std::string &)
+  {
+    log(text);
+  }
+
+  virtual void startEndElement(const std::string &text, const std::string &name, const Attributes &)
+  {
+    doStartElement(name);
+
+    log(text);
+
+    doEndElement();
+  }
+
+  virtual void startElement(const std::string &text, const std::string &name, const Attributes &)
+  {
+    doStartElement(name);
+
+    log(text);
+  }
+
+  virtual void text(const std::string &text)
+  {
+    if (_path == "/gpx/wpt/name" || _path == "/gpx/rte/name" || _path == "/gpx/trk/name")
+    {
+      _currentName = XMLParser::translateEntityRefs(XMLParser::trim(text));
+    }
+
+    log(text);
+  }
+
+  virtual void endElement(const std::string &text, const std::string &)
+  {
+    log(text);
+
+    doEndElement();
   }
 
 
@@ -219,7 +228,6 @@ private:
 
   bool          _inSegment;
   int           _currentSegmentNr;
-  std::string   _currentSegmentText;
 };
 
 // -- Main program ------------------------------------------------------------
@@ -235,7 +243,7 @@ int main(int argc, char *argv[])
   {
     if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "-?") == 0)
     {
-      std::cout << "Usage: gpxrm [-h] [-v] [-w \"name\"] [-t \"<name>\" [-s <segment>]] [-r \"<name>\"] [-o <out.gpx>] <file.gpx>" << std::endl;
+      std::cout << "Usage: gpxrm [-h] [-v] [-w \"<name>\"] [-t \"<name>\" [-s <segment>]] [-r \"<name>\"] [-o <out.gpx>] <file.gpx>" << std::endl;
       std::cout << "  -h              help" << std::endl;
       std::cout << "  -v              show version" << std::endl;
       std::cout << "  -w \"name\"       remove the waypoint with <name>" << std::endl;
@@ -249,7 +257,7 @@ int main(int argc, char *argv[])
     }
     else if (strcmp(argv[i], "-v") == 0)
     {
-      std::cout << "gpxrm v0.1.0" << std::endl;
+      std::cout << "gpxrm v" << version << std::endl;
       return 0;
     }
     else if (strcmp(argv[i], "-w") == 0 && i < argc)
