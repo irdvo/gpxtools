@@ -7,3 +7,7 @@ target_link_libraries(gpxls)
 
 add_executable(gpxrm gpxrm.cpp XMLParser.cpp)
 target_link_libraries(gpxrm)
+
+add_executable(gpxsim gpxsim.cpp XMLParser.cpp)
+target_link_libraries(gpxsim)
+
