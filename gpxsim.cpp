@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cstring>
 #include <fstream>
+#include <cmath>
 
 #include "XMLParser.h"
 
@@ -37,23 +38,69 @@ public:
     return true;
   }
 
-private:
+  static double deg2rad(double deg)
+  {
+    return (deg * M_PI) / 180.0;
+  }
+  
+  static double rad2deg(double rad)
+  {
+    return (rad * 180.0) / M_PI;
+  }
+  
   // http://www.movable-type.co.uk/scripts/latlong.html
-  double distance()
+  
+  // distance in metres
+  static double distance(double lat1deg, double lon1deg, double lat2deg, double lon2deg)
   {
-    /// TODO
+    const double R = 6371E3; // metres
+    
+    double lat1rad = deg2rad(lat1deg);
+    double lon1rad = deg2rad(lon1deg);
+    double lat2rad = deg2rad(lat2deg);
+    double lon2rad = deg2rad(lon2deg);
+    
+    double dlat    = lat2rad - lat1rad;
+    double dlon    = lon2rad - lon1rad;
+    
+    double a       = sin(dlat / 2.0) * sin(dlat / 2.0) + cos(lat1rad) * cos(lat2rad) * sin(dlon / 2.0) * sin(dlon / 2.0);
+    double c       = 2.0 * atan2(sqrt(a), sqrt(1.0 - a));
+    
+    return c * R;
   }
 
-  double bearing()
+  // bearing in rads
+  static double bearing(double lat1deg, double lon1deg, double lat2deg, double lon2deg)
   {
-    /// TODO
+    const double R = 6371E3; // metres
+    
+    double lat1rad = deg2rad(lat1deg);
+    double lon1rad = deg2rad(lon1deg);
+    double lat2rad = deg2rad(lat2deg);
+    double lon2rad = deg2rad(lon2deg);
+    
+    double dlon    = lon2rad - lon1rad;
+    
+    double y       = sin(dlon) * cos(lat2rad);
+    double x       = cos(lat1rad) * sin(lat2rad) - sin(lat1rad) * cos(lat2rad) * cos(dlon);
+    
+    return atan2(y, x);
+
   }
 
-  double crosstrack()
+  // crosstrack distance in metres from point3 to the point1-point2 line
+  static double crosstrack(double lat1deg, double lon1deg, double lat2deg, double lon2deg, double lat3deg, double lon3deg) 
   {
-    /// TODO
+    const double R = 6371E3; // metres
+    
+    double distance13 = distance(lat1deg, lon1deg, lat3deg, lon3deg) / R;
+    double bearing13  = bearing(lat1deg, lon1deg, lat3deg, lon3deg);
+    double bearing12  = bearing(lat1deg, lon1deg, lat2deg, lon2deg);
+    
+    return asin(sin(distance13) * sin(bearing13 - bearing12)) * R;
   }
 
+private:
   void log(const std::string &text)
   {
     if (false) /// TODO
@@ -176,7 +223,7 @@ int main(int argc, char *argv[])
       std::cout << "  -i              report the results of the simplification" << std::endl;
       std::cout << "  -d <distance>   remove route or track points within distance of a point (in cm)" << std::endl;
       std::cout << "  -n <number>     remove route or track points until the route or track contains <number> points" << std::endl;
-      std::cout << "  -t <distance>   remove route or track points with a cross track distance less than <distance> (in cm)" << std::endl;
+      std::cout << "  -x <distance>   remove route or track points with a cross track distance less than <distance> (in cm)" << std::endl;
       std::cout << "  -o <out.gpx>    the output gpx file (overwrites existing file)" << std::endl;
       std::cout << " file.gpx         the input gpx file" << std::endl << std::endl;
       std::cout << "   Simplify a route or track using the distance threshold and/or the Douglas-Peucker algorithm." << std::endl;
@@ -199,7 +246,7 @@ int main(int argc, char *argv[])
     {
       /// TODO
     }
-    else if (strcmp(argv[i], "-t") == 0 && i < argc)
+    else if (strcmp(argv[i], "-x") == 0 && i < argc)
     {
       /// TODO
     }
@@ -252,9 +299,15 @@ int main(int argc, char *argv[])
       std::cerr << "Error: unknown option:" << argv[i] << std::endl;
       return 1;
     }
+    
+    
 
     i++;
   }
+  
+  std::cout << "Distance:  " << GpxSim::distance(50.06639, -5.71472, 58.64389, -3.07000) << std::endl;
+  std::cout << "Bearing:   " << GpxSim::bearing(50.06639, -5.71472, 58.64389, -3.07000) << std::endl;
+  std::cout << "Crosstrack:" << GpxSim::crosstrack(53.3206, -1.7297, 53.1887, 0.1334, 53.2611, -0.7972) << std::endl;
 
   return 0;
 }
