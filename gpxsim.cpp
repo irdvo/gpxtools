@@ -1,7 +1,10 @@
 #include <iostream>
 #include <cstring>
 #include <fstream>
+#include <list>
 #include <cmath>
+#include <limits>
+#include <iomanip>
 
 #include "XMLParser.h"
 
@@ -13,7 +16,8 @@ class GpxSim : public XMLParserHandler
 public:
   // -- Constructor -----------------------------------------------------------
   GpxSim() :
-    _outputFile(&std::cout)
+    _outputFile(&std::cout),
+    _inPoints(false)
   {
   }
 
@@ -51,9 +55,9 @@ public:
   // http://www.movable-type.co.uk/scripts/latlong.html
   
   // distance in metres
-  static double distance(double lat1deg, double lon1deg, double lat2deg, double lon2deg)
+  static double calcDistance(double lat1deg, double lon1deg, double lat2deg, double lon2deg)
   {
-    const double R = 6371E3; // metres
+    const double R = 6371E3; // m
     
     double lat1rad = deg2rad(lat1deg);
     double lon1rad = deg2rad(lon1deg);
@@ -70,9 +74,9 @@ public:
   }
 
   // bearing in rads
-  static double bearing(double lat1deg, double lon1deg, double lat2deg, double lon2deg)
+  static double calcBearing(double lat1deg, double lon1deg, double lat2deg, double lon2deg)
   {
-    const double R = 6371E3; // metres
+    const double R = 6371E3; // m
     
     double lat1rad = deg2rad(lat1deg);
     double lon1rad = deg2rad(lon1deg);
@@ -85,26 +89,26 @@ public:
     double x       = cos(lat1rad) * sin(lat2rad) - sin(lat1rad) * cos(lat2rad) * cos(dlon);
     
     return atan2(y, x);
-
   }
 
   // crosstrack distance in metres from point3 to the point1-point2 line
-  static double crosstrack(double lat1deg, double lon1deg, double lat2deg, double lon2deg, double lat3deg, double lon3deg) 
+  static double calcCrosstrack(double lat1deg, double lon1deg, double lat2deg, double lon2deg, double lat3deg, double lon3deg)
   {
-    const double R = 6371E3; // metres
+    const double R = 6371E3; // m
     
-    double distance13 = distance(lat1deg, lon1deg, lat3deg, lon3deg) / R;
-    double bearing13  = bearing(lat1deg, lon1deg, lat3deg, lon3deg);
-    double bearing12  = bearing(lat1deg, lon1deg, lat2deg, lon2deg);
+    double distance13 = calcDistance(lat1deg, lon1deg, lat3deg, lon3deg) / R;
+    double bearing13  = calcBearing(lat1deg, lon1deg, lat3deg, lon3deg);
+    double bearing12  = calcBearing(lat1deg, lon1deg, lat2deg, lon2deg);
     
     return asin(sin(distance13) * sin(bearing13 - bearing12)) * R;
   }
 
 private:
-  void log(const std::string &text)
+  void store(const std::string &text)
   {
-    if (false) /// TODO
+    if (_inPoints)
     {
+      _current._text.append(text);
     }
     else
     {
@@ -112,14 +116,93 @@ private:
     }
   }
 
-  void doStartElement(const std::string &name)
+  void outputChunks()
+  {
+    while (!_chunks.empty())
+    {
+      *_outputFile << _chunks.front()._text;
+
+      _chunks.pop_front();
+    }
+  }
+
+  void showChunks(const std::string &title)
+  {
+    int points      = 0;
+    double distance = 0.0;
+
+    auto last = _chunks.begin();
+
+    while (last != _chunks.end() && last->_type != Chunk::POINT)
+    {
+      ++last;
+    }
+
+    if (last != _chunks.end())
+    {
+      points++;
+
+      auto iter = last;
+
+      ++iter;
+
+      for (; iter != _chunks.end(); ++iter)
+      {
+        if (iter->_type == Chunk::POINT)
+        {
+          points++;
+
+          distance += calcDistance(last->_lat, last->_lon, iter->_lat, iter->_lon);
+
+          last = iter;
+        }
+      }
+    }
+
+    std::cout << title << " Number of points: " << std::setw(4) << points << " Distance: " << std::setw(8) << std::setprecision(2) << std::fixed << distance << " m" << std::endl;
+  }
+
+  static double getDouble(const std::string &value)
+  {
+    try
+    {
+      return std::stod(value);
+    }
+    catch (...)
+    {
+      return std::numeric_limits<double>::min();
+    }
+  }
+
+  static double getDoubleAttribute(const Attributes &atts, const std::string &key)
+  {
+    auto iter = atts.find(key);
+
+    return iter != atts.end() ? getDouble(iter->second) : std::numeric_limits<double>::min();
+  }
+
+
+  void doStartElement(const std::string &name, const Attributes &attributes)
   {
     _path.append("/");
     _path.append(name);
 
     if (_path == "/gpx/trk/trkseg")
     {
-      /// TODO
+      _current.clear();
+
+      _inPoints = true;
+    }
+    else if (_path == "/gpx/trk/trkseg/trkpt")
+    {
+      if (!_current._text.empty()) _chunks.push_back(_current);
+
+      _current.clear();
+
+      double lat = getDoubleAttribute(attributes, "lat");
+      double lon = getDoubleAttribute(attributes, "lon");
+
+      _current.point(lat, lon);
     }
   }
 
@@ -127,7 +210,23 @@ private:
   {
     if (_path == "/gpx/trk/trkseg")
     {
-      /// TODO
+      if (!_current._text.empty()) _chunks.push_back(_current);
+
+      showChunks("Original  track segment:");
+
+      /// TODO: optimize
+
+      showChunks("Optimized track segment:");
+
+      outputChunks();
+
+      _inPoints = false;
+    }
+    else if (_path == "/gpx/trk/trkseg/trkpt")
+    {
+      _chunks.push_back(_current);
+
+      _current.clear();
     }
 
     size_t i =  _path.find_last_of('/');
@@ -139,17 +238,17 @@ public:
   // -- Callbacks -------------------------------------------------------------
   virtual void xmlDecl(const std::string &text, const Attributes &)
   {
-    log(text);
+    store(text);
   }
 
   virtual void processingInstruction(const std::string &text, const std::string &, const std::string &)
   {
-    log(text);
+    store(text);
   }
 
   virtual void docTypeDecl(const std::string &text)
   {
-    log(text);
+    store(text);
   }
 
   virtual void unhandled(const std::string &text, int lineNumber, int columnNumber)
@@ -160,48 +259,79 @@ public:
 
   virtual void cdataDecl(const std::string &text, const std::string &)
   {
-    log(text);
+    store(text);
   }
 
   virtual void comment(const std::string &text, const std::string &)
   {
-    log(text);
+    store(text);
   }
 
-  virtual void startEndElement(const std::string &text, const std::string &name, const Attributes &)
+  virtual void startEndElement(const std::string &text, const std::string &name, const Attributes &attributes)
   {
-    doStartElement(name);
+    doStartElement(name, attributes);
 
-    log(text);
+    store(text);
 
     doEndElement();
   }
 
-  virtual void startElement(const std::string &text, const std::string &name, const Attributes &)
+  virtual void startElement(const std::string &text, const std::string &name, const Attributes &attributes)
   {
-    doStartElement(name);
+    doStartElement(name, attributes);
 
-    log(text);
+    store(text);
   }
 
   virtual void text(const std::string &text)
   {
-    log(text);
+    store(text);
   }
 
   virtual void endElement(const std::string &text, const std::string &)
   {
-    log(text);
+    store(text);
 
     doEndElement();
   }
 
 
 private:
-  // Members
-  std::ostream *_outputFile;
+  // Structs
+  struct Chunk
+  {
+    void clear()
+    {
+      _type  = TEXT;
+      _text.clear();
+      _lat   = 0.0;
+      _lon   = 0.0;
+      _error = std::numeric_limits<double>::max();
+    }
 
-  std::string   _path;
+    void point(double lat, double lon)
+    {
+      _type  = POINT;
+      _lat   = lat;
+      _lon   = lon;
+      _error = std::numeric_limits<double>::max();
+    }
+
+    enum { TEXT, POINT }   _type;
+    std::string            _text;
+    double                 _lat;
+    double                 _lon;
+    double                 _error;
+  };
+
+  // Members
+  std::ostream     *_outputFile;
+
+  std::string       _path;
+
+  bool              _inPoints;
+  Chunk             _current;
+  std::list<Chunk>  _chunks;
 };
 
 // -- Main program ------------------------------------------------------------
@@ -305,9 +435,9 @@ int main(int argc, char *argv[])
     i++;
   }
   
-  std::cout << "Distance:  " << GpxSim::distance(50.06639, -5.71472, 58.64389, -3.07000) << std::endl;
-  std::cout << "Bearing:   " << GpxSim::bearing(50.06639, -5.71472, 58.64389, -3.07000) << std::endl;
-  std::cout << "Crosstrack:" << GpxSim::crosstrack(53.3206, -1.7297, 53.1887, 0.1334, 53.2611, -0.7972) << std::endl;
+  std::cout << "Distance:  " << GpxSim::calcDistance(50.06639, -5.71472, 58.64389, -3.07000) << std::endl;
+  std::cout << "Bearing:   " << GpxSim::calcBearing(50.06639, -5.71472, 58.64389, -3.07000) << std::endl;
+  std::cout << "Crosstrack:" << GpxSim::calcCrosstrack(53.3206, -1.7297, 53.1887, 0.1334, 53.2611, -0.7972) << std::endl;
 
   return 0;
 }
