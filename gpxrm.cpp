@@ -260,15 +260,15 @@ int main(int argc, char *argv[])
       std::cout << "gpxrm v" << version << std::endl;
       return 0;
     }
-    else if (strcmp(argv[i], "-w") == 0 && i < argc)
+    else if (strcmp(argv[i], "-w") == 0 && i+1 < argc)
     {
       gpxrm.setWaypointName(argv[++i]);
     }
-    else if (strcmp(argv[i], "-t") == 0 && i < argc)
+    else if (strcmp(argv[i], "-t") == 0 && i+1 < argc)
     {
       gpxrm.setTrackName(argv[++i]);
     }
-    else if (strcmp(argv[i], "-s") == 0 && i < argc)
+    else if (strcmp(argv[i], "-s") == 0 && i+1 < argc)
     {
       if (gpxrm.trackName().empty())
       {

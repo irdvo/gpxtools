@@ -18,6 +18,7 @@ public:
   GpxSim() :
     _outputFile(&std::cout),
     _verbose(false),
+    _simplifyDistance(0.0),
     _inPoints(false)
   {
   }
@@ -30,6 +31,8 @@ public:
   // -- Properties ------------------------------------------------------------
 
   void setVerbose(bool verbose) { _verbose = verbose; }
+
+  void setSimplifyDistance(double distance) { _simplifyDistance = distance; }
 
   // -- Parse a file ----------------------------------------------------------
   bool parseFile(std::istream &input, std::ostream &output)
@@ -104,6 +107,19 @@ public:
     return asin(sin(distance13) * sin(bearing13 - bearing12)) * R;
   }
 
+  static double getDouble(const std::string &value)
+  {
+    try
+    {
+      return std::stod(value);
+    }
+    catch (...)
+    {
+      return std::numeric_limits<double>::min();
+    }
+  }
+
+
 private:
   void store(const std::string &text)
   {
@@ -132,46 +148,48 @@ private:
     int points      = 0;
     double distance = 0.0;
 
-    auto last = _chunks.begin();
+    auto prev = _chunks.end();
 
-    while (last != _chunks.end() && last->_type != Chunk::POINT)
+    for (auto iter = _chunks.begin(); iter != _chunks.end(); ++iter)
     {
-      ++last;
-    }
-
-    if (last != _chunks.end())
-    {
-      points++;
-
-      auto iter = last;
-
-      ++iter;
-
-      for (; iter != _chunks.end(); ++iter)
+      if (iter->_type == Chunk::POINT)
       {
-        if (iter->_type == Chunk::POINT)
+        points++;
+
+        if (prev != _chunks.end())
         {
-          points++;
-
-          distance += calcDistance(last->_lat, last->_lon, iter->_lat, iter->_lon);
-
-          last = iter;
+          distance += calcDistance(prev->_lat, prev->_lon, iter->_lat, iter->_lon);
         }
+
+        prev = iter;
       }
     }
 
-    std::cout << title << " Number of points: " << std::setw(4) << points << " Distance: " << std::setw(8) << std::setprecision(2) << std::fixed << distance << " m" << std::endl;
+    std::cout << title << " Points: " << std::setw(4) << points << " Distance: " << std::setw(10) << std::setprecision(2) << std::fixed << distance << " m" << std::endl;
   }
 
-  static double getDouble(const std::string &value)
+  void simplifyDistance()
   {
-    try
+    auto iter = _chunks.begin();
+    auto prev = _chunks.end();
+
+    while (iter != _chunks.end())
     {
-      return std::stod(value);
-    }
-    catch (...)
-    {
-      return std::numeric_limits<double>::min();
+      if (iter->_type == Chunk::POINT)
+      {
+        if (prev != _chunks.end() && calcDistance(prev->_lat, prev->_lon, iter->_lat, iter->_lon) < _simplifyDistance)
+        {
+          iter = _chunks.erase(iter);
+        }
+        else
+        {
+          prev = iter++;
+        }
+      }
+      else
+      {
+        ++iter;
+      }
     }
   }
 
@@ -215,7 +233,7 @@ private:
 
       if (_verbose) verboseChunks("Original  track segment:");
 
-      /// TODO: optimize
+      if (_simplifyDistance > 0.0) simplifyDistance();
 
       if (_verbose) verboseChunks("Optimized track segment:");
 
@@ -328,6 +346,7 @@ private:
   // Members
   std::ostream     *_outputFile;
   bool              _verbose;
+  double            _simplifyDistance;
 
   std::string       _path;
 
@@ -353,9 +372,9 @@ int main(int argc, char *argv[])
       std::cout << "  -h              help" << std::endl;
       std::cout << "  -v              show version" << std::endl;
       std::cout << "  -i              report the results of the simplification" << std::endl;
-      std::cout << "  -d <distance>   remove route or track points within distance of a point (in cm)" << std::endl;
+      std::cout << "  -d <distance>   remove route or track points within distance of the previous point (in m)" << std::endl;
       std::cout << "  -n <number>     remove route or track points until the route or track contains <number> points" << std::endl;
-      std::cout << "  -x <distance>   remove route or track points with a cross track distance less than <distance> (in cm)" << std::endl;
+      std::cout << "  -x <distance>   remove route or track points with a cross track distance less than <distance> (in m)" << std::endl;
       std::cout << "  -o <out.gpx>    the output gpx file (overwrites existing file)" << std::endl;
       std::cout << " file.gpx         the input gpx file" << std::endl << std::endl;
       std::cout << "   Simplify a route or track using the distance threshold and/or the Douglas-Peucker algorithm." << std::endl;
@@ -370,19 +389,29 @@ int main(int argc, char *argv[])
     {
       gpxSim.setVerbose(true);
     }
-    else if (strcmp(argv[i], "-d") == 0 && i < argc)
+    else if (strcmp(argv[i], "-d") == 0 && i+1 < argc)
+    {
+      double distance = GpxSim::getDouble(argv[++i]);
+
+      if (distance > 0.0)
+      {
+        gpxSim.setSimplifyDistance(distance);
+      }
+      else
+      {
+        std::cerr << "Error: invalid distance for option -d." << std::endl;
+        return 1;
+      }
+    }
+    else if (strcmp(argv[i], "-n") == 0 && i+1 < argc)
     {
       /// TODO
     }
-    else if (strcmp(argv[i], "-n") == 0 && i < argc)
+    else if (strcmp(argv[i], "-x") == 0 && i+1 < argc)
     {
       /// TODO
     }
-    else if (strcmp(argv[i], "-x") == 0 && i < argc)
-    {
-      /// TODO
-    }
-    else if (strcmp(argv[i], "-o") == 0 && i < argc)
+    else if (strcmp(argv[i], "-o") == 0 && i+1 < argc)
     {
       if (outputFilename.empty())
       {
