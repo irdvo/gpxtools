@@ -17,6 +17,7 @@ public:
   // -- Constructor -----------------------------------------------------------
   GpxSim() :
     _outputFile(&std::cout),
+    _verbose(false),
     _inPoints(false)
   {
   }
@@ -27,6 +28,8 @@ public:
   }
 
   // -- Properties ------------------------------------------------------------
+
+  void setVerbose(bool verbose) { _verbose = verbose; }
 
   // -- Parse a file ----------------------------------------------------------
   bool parseFile(std::istream &input, std::ostream &output)
@@ -76,8 +79,6 @@ public:
   // bearing in rads
   static double calcBearing(double lat1deg, double lon1deg, double lat2deg, double lon2deg)
   {
-    const double R = 6371E3; // m
-    
     double lat1rad = deg2rad(lat1deg);
     double lon1rad = deg2rad(lon1deg);
     double lat2rad = deg2rad(lat2deg);
@@ -126,7 +127,7 @@ private:
     }
   }
 
-  void showChunks(const std::string &title)
+  void verboseChunks(const std::string &title)
   {
     int points      = 0;
     double distance = 0.0;
@@ -212,11 +213,11 @@ private:
     {
       if (!_current._text.empty()) _chunks.push_back(_current);
 
-      showChunks("Original  track segment:");
+      if (_verbose) verboseChunks("Original  track segment:");
 
       /// TODO: optimize
 
-      showChunks("Optimized track segment:");
+      if (_verbose) verboseChunks("Optimized track segment:");
 
       outputChunks();
 
@@ -326,6 +327,7 @@ private:
 
   // Members
   std::ostream     *_outputFile;
+  bool              _verbose;
 
   std::string       _path;
 
@@ -364,9 +366,9 @@ int main(int argc, char *argv[])
       std::cout << "gpxsim v" << version << std::endl;
       return 0;
     }
-    else if (strcmp(argv[i], "-i") == 0 && i < argc)
+    else if (strcmp(argv[i], "-i") == 0)
     {
-      /// TODO
+      gpxSim.setVerbose(true);
     }
     else if (strcmp(argv[i], "-d") == 0 && i < argc)
     {
@@ -429,8 +431,6 @@ int main(int argc, char *argv[])
       std::cerr << "Error: unknown option:" << argv[i] << std::endl;
       return 1;
     }
-    
-    
 
     i++;
   }
