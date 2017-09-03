@@ -19,6 +19,7 @@ public:
     _outputFile(&std::cout),
     _verbose(false),
     _simplifyDistance(0.0),
+    _simplifyCrossTrack(0.0),
     _inPoints(false)
   {
   }
@@ -33,6 +34,8 @@ public:
   void setVerbose(bool verbose) { _verbose = verbose; }
 
   void setSimplifyDistance(double distance) { _simplifyDistance = distance; }
+
+  void setSimplifyCrossTrack(double crossTrack) { _simplifyCrossTrack = crossTrack; }
 
   // -- Parse a file ----------------------------------------------------------
   bool parseFile(std::istream &input, std::ostream &output)
@@ -193,6 +196,42 @@ private:
     }
   }
 
+  void simplifyCrossTrack()
+  {
+    auto p1 = _chunks.end();
+    auto p2 = _chunks.end();
+    auto p3 = _chunks.begin();
+
+    std::cout << std::setprecision(8);
+    while (p3 != _chunks.end())
+    {
+      if (p3->_type == Chunk::POINT)
+      {
+#if 0
+        if (p1 != _chunks.end() &&
+            p2 != _chunks.end())
+        {
+          double crossTrack = fabs(calcCrosstrack(p1->_lat, p1->_lon, p3->_lat, p3->_lon, p2->_lat, p2->_lon));
+          std::cout << "P1:" << p1->_lat << "," << p1->_lon << " P3:" << p3->_lat << "," << p3->_lon << " P2:" << p2->_lat << "," << p2->_lon << ":" << crossTrack << std::endl;
+        }
+#endif
+        if (p1 != _chunks.end() &&
+            p2 != _chunks.end() &&
+            fabs(calcCrosstrack(p1->_lat, p1->_lon, p3->_lat, p3->_lon, p2->_lat, p2->_lon)) < _simplifyCrossTrack)
+        {
+          _chunks.erase(p2);
+          p2 = p3;
+        }
+        else
+        {
+          p1 = p2;
+          p2 = p3;
+        }
+      }
+      ++p3;
+    }
+  }
+
   static double getDoubleAttribute(const Attributes &atts, const std::string &key)
   {
     auto iter = atts.find(key);
@@ -233,7 +272,8 @@ private:
 
       if (_verbose) verboseChunks("Original  track segment:");
 
-      if (_simplifyDistance > 0.0) simplifyDistance();
+      if (_simplifyDistance > 0.0)   simplifyDistance();
+      if (_simplifyCrossTrack > 0.0) simplifyCrossTrack();
 
       if (_verbose) verboseChunks("Optimized track segment:");
 
@@ -347,6 +387,7 @@ private:
   std::ostream     *_outputFile;
   bool              _verbose;
   double            _simplifyDistance;
+  double            _simplifyCrossTrack;
 
   std::string       _path;
 
@@ -409,7 +450,16 @@ int main(int argc, char *argv[])
     }
     else if (strcmp(argv[i], "-x") == 0 && i+1 < argc)
     {
-      /// TODO
+      double crossTrack = GpxSim::getDouble(argv[++i]);
+
+      if (crossTrack > 0.0)
+      {
+        gpxSim.setSimplifyCrossTrack(crossTrack);
+      }
+      else
+      {
+        std::cerr << "Error: invalid cross track distance for option -x." << std::endl;
+      }
     }
     else if (strcmp(argv[i], "-o") == 0 && i+1 < argc)
     {
@@ -464,9 +514,11 @@ int main(int argc, char *argv[])
     i++;
   }
   
-  std::cout << "Distance:  " << GpxSim::calcDistance(50.06639, -5.71472, 58.64389, -3.07000) << std::endl;
-  std::cout << "Bearing:   " << GpxSim::calcBearing(50.06639, -5.71472, 58.64389, -3.07000) << std::endl;
-  std::cout << "Crosstrack:" << GpxSim::calcCrosstrack(53.3206, -1.7297, 53.1887, 0.1334, 53.2611, -0.7972) << std::endl;
+#if 0
+  std::cout << "Distance:  " << GpxSim::calcDistance(50.06639, -5.71472, 58.64389, -3.07000) << std::endl; // 968853.52
+  std::cout << "Bearing:   " << GpxSim::calcBearing(50.06639, -5.71472, 58.64389, -3.07000) << std::endl; // 0.16
+  std::cout << "Crosstrack:" << GpxSim::calcCrosstrack(53.3206, -1.7297, 53.1887, 0.1334, 53.2611, -0.7972) << std::endl; // -307.55
+#endif
 
   return 0;
 }
