@@ -20,6 +20,7 @@ public:
     _verbose(false),
     _simplifyDistance(0.0),
     _simplifyCrossTrack(0.0),
+    _simplifyToNumber(0),
     _inPoints(false)
   {
   }
@@ -36,6 +37,8 @@ public:
   void setSimplifyDistance(double distance) { _simplifyDistance = distance; }
 
   void setSimplifyCrossTrack(double crossTrack) { _simplifyCrossTrack = crossTrack; }
+
+  void setSimplifyToNumber(int number) { _simplifyToNumber = number; }
 
   // -- Parse a file ----------------------------------------------------------
   bool parseFile(std::istream &input, std::ostream &output)
@@ -81,6 +84,7 @@ public:
     
     return c * R;
   }
+  // std::cout << "Distance:  " << GpxSim::calcDistance(50.06639, -5.71472, 58.64389, -3.07000) << std::endl; // 968853.52
 
   // bearing in rads
   static double calcBearing(double lat1deg, double lon1deg, double lat2deg, double lon2deg)
@@ -97,6 +101,8 @@ public:
     
     return atan2(y, x);
   }
+  // std::cout << "Bearing:   " << GpxSim::calcBearing(50.06639, -5.71472, 58.64389, -3.07000) << std::endl; // 0.16
+
 
   // crosstrack distance in metres from point3 to the point1-point2 line
   static double calcCrosstrack(double lat1deg, double lon1deg, double lat2deg, double lon2deg, double lat3deg, double lon3deg)
@@ -109,6 +115,8 @@ public:
     
     return asin(sin(distance13) * sin(bearing13 - bearing12)) * R;
   }
+  // std::cout << "Crosstrack:" << GpxSim::calcCrosstrack(53.3206, -1.7297, 53.1887, 0.1334, 53.2611, -0.7972) << std::endl; // -307.55
+
 
   static double getDouble(const std::string &value)
   {
@@ -122,8 +130,46 @@ public:
     }
   }
 
+  static double getInt(const std::string &value)
+  {
+    try
+    {
+      return std::stoi(value);
+    }
+    catch (...)
+    {
+      return 0;
+    }
+  }
 
 private:
+  // Structs
+  struct Chunk
+  {
+    void clear()
+    {
+      _type  = TEXT;
+      _text.clear();
+      _lat   = 0.0;
+      _lon   = 0.0;
+      _crossTrack = std::numeric_limits<double>::max();
+    }
+
+    void point(double lat, double lon)
+    {
+      _type       = POINT;
+      _lat        = lat;
+      _lon        = lon;
+      _crossTrack = std::numeric_limits<double>::max();
+    }
+
+    enum { TEXT, POINT }   _type;
+    std::string            _text;
+    double                 _lat;
+    double                 _lon;
+    double                 _crossTrack;
+  };
+
   void store(const std::string &text)
   {
     if (_inPoints)
@@ -232,6 +278,127 @@ private:
     }
   }
 
+  int setCrossTracks()
+  {
+    int points = 0;
+
+    auto p1 = _chunks.end();
+    auto p2 = _chunks.end();
+    auto p3 = _chunks.begin();
+
+    while (p3 != _chunks.end())
+    {
+      if (p3->_type == Chunk::POINT)
+      {
+        points++;
+
+        p3->_crossTrack = std::numeric_limits<double>::max();
+
+        if (p1 != _chunks.end() &&
+            p2 != _chunks.end())
+        {
+          p2->_crossTrack = fabs(calcCrosstrack(p1->_lat, p1->_lon, p3->_lat, p3->_lon, p2->_lat, p2->_lon));
+        }
+
+        p1 = p2;
+        p2 = p3;
+      }
+      ++p3;
+    }
+
+    return points;
+  }
+
+  std::list<Chunk>::iterator forwards(std::list<Chunk>::iterator p)
+  {
+    ++p;
+    while (p != _chunks.end())
+    {
+      if (p->_type == Chunk::POINT)
+      {
+        break;
+      }
+      ++p;
+    }
+
+    return p;
+  }
+
+  std::list<Chunk>::iterator backwards(std::list<Chunk>::iterator p)
+  {
+    while (p != _chunks.begin())
+    {
+      --p;
+      if (p->_type == Chunk::POINT)
+      {
+        return p;
+      }
+    }
+
+    return _chunks.end();
+  }
+
+  void removeLowestCrossTrack()
+  {
+    auto lowest = _chunks.end();
+
+    for (auto p = _chunks.begin(); p != _chunks.end(); ++p)
+    {
+      if (p->_type == Chunk::POINT &&
+          (lowest == _chunks.end() || lowest->_crossTrack > p->_crossTrack))
+      {
+        lowest = p;
+      }
+    }
+
+    if (lowest != _chunks.end())
+    {
+      auto p2 = backwards(lowest);
+      auto p1 = (p2 != _chunks.end() ? backwards(p2) : _chunks.end());
+
+      auto p4 = forwards(lowest);
+      auto p5 = (p4 != _chunks.end() ? forwards(p4) : _chunks.end());
+
+      _chunks.erase(lowest);
+
+      // Update the crosstracks
+      if (p2 != _chunks.end())
+      {
+        if (p1 != _chunks.end() && p4 != _chunks.end())
+        {
+          p2->_crossTrack = fabs(calcCrosstrack(p1->_lat, p1->_lon, p4->_lat, p4->_lon, p2->_lat, p2->_lon));
+        }
+        else
+        {
+          p2->_crossTrack = std::numeric_limits<double>::max();
+        }
+      }
+
+      if (p4 != _chunks.end())
+      {
+        if (p2 != _chunks.end() && p5 != _chunks.end())
+        {
+          p4->_crossTrack = fabs(calcCrosstrack(p2->_lat, p2->_lon, p5->_lat, p5->_lon, p4->_lat, p4->_lon));
+        }
+        else
+        {
+          p4->_crossTrack = std::numeric_limits<double>::max();
+        }
+      }
+    }
+  }
+
+  void simplifyToNumber()
+  {
+    int points = setCrossTracks();
+
+    while (_simplifyToNumber < points)
+    {
+      removeLowestCrossTrack();
+      points--;
+    }
+  }
+
   static double getDoubleAttribute(const Attributes &atts, const std::string &key)
   {
     auto iter = atts.find(key);
@@ -274,6 +441,7 @@ private:
 
       if (_simplifyDistance > 0.0)   simplifyDistance();
       if (_simplifyCrossTrack > 0.0) simplifyCrossTrack();
+      if (_simplifyToNumber > 0)     simplifyToNumber();
 
       if (_verbose) verboseChunks("Optimized track segment:");
 
@@ -354,40 +522,14 @@ public:
     doEndElement();
   }
 
-
 private:
-  // Structs
-  struct Chunk
-  {
-    void clear()
-    {
-      _type  = TEXT;
-      _text.clear();
-      _lat   = 0.0;
-      _lon   = 0.0;
-      _error = std::numeric_limits<double>::max();
-    }
-
-    void point(double lat, double lon)
-    {
-      _type  = POINT;
-      _lat   = lat;
-      _lon   = lon;
-      _error = std::numeric_limits<double>::max();
-    }
-
-    enum { TEXT, POINT }   _type;
-    std::string            _text;
-    double                 _lat;
-    double                 _lon;
-    double                 _error;
-  };
 
   // Members
   std::ostream     *_outputFile;
   bool              _verbose;
   double            _simplifyDistance;
   double            _simplifyCrossTrack;
+  int               _simplifyToNumber;
 
   std::string       _path;
 
@@ -446,7 +588,17 @@ int main(int argc, char *argv[])
     }
     else if (strcmp(argv[i], "-n") == 0 && i+1 < argc)
     {
-      /// TODO
+      int number = GpxSim::getInt(argv[++i]);
+
+      if (number > 0)
+      {
+        gpxSim.setSimplifyToNumber(number);
+      }
+      else
+      {
+        std::cerr << "Error: invalid number for option -n." << std::endl;
+        return 1;
+      }
     }
     else if (strcmp(argv[i], "-x") == 0 && i+1 < argc)
     {
@@ -514,11 +666,5 @@ int main(int argc, char *argv[])
     i++;
   }
   
-#if 0
-  std::cout << "Distance:  " << GpxSim::calcDistance(50.06639, -5.71472, 58.64389, -3.07000) << std::endl; // 968853.52
-  std::cout << "Bearing:   " << GpxSim::calcBearing(50.06639, -5.71472, 58.64389, -3.07000) << std::endl; // 0.16
-  std::cout << "Crosstrack:" << GpxSim::calcCrosstrack(53.3206, -1.7297, 53.1887, 0.1334, 53.2611, -0.7972) << std::endl; // -307.55
-#endif
-
   return 0;
 }
