@@ -144,14 +144,16 @@ public:
 
 private:
   // Structs
+  enum ChunkType { TEXT, POINT };
+
   struct Chunk
   {
     void clear()
     {
-      _type  = TEXT;
+      _type       = TEXT;
       _text.clear();
-      _lat   = 0.0;
-      _lon   = 0.0;
+      _lat        = 0.0;
+      _lon        = 0.0;
       _crossTrack = std::numeric_limits<double>::max();
     }
 
@@ -163,11 +165,11 @@ private:
       _crossTrack = std::numeric_limits<double>::max();
     }
 
-    enum { TEXT, POINT }   _type;
-    std::string            _text;
-    double                 _lat;
-    double                 _lon;
-    double                 _crossTrack;
+    ChunkType     _type;
+    std::string   _text;
+    double        _lat;
+    double        _lon;
+    double        _crossTrack;
   };
 
   void store(const std::string &text)
@@ -184,9 +186,16 @@ private:
 
   void outputChunks()
   {
+    ChunkType last = ChunkType::POINT;
+
     while (!_chunks.empty())
     {
-      *_outputFile << _chunks.front()._text;
+      if (last != ChunkType::TEXT || _chunks.front()._type != ChunkType::TEXT)
+      {
+        *_outputFile << _chunks.front()._text;
+      }
+
+      last = _chunks.front()._type;
 
       _chunks.pop_front();
     }
@@ -201,7 +210,7 @@ private:
 
     for (auto iter = _chunks.begin(); iter != _chunks.end(); ++iter)
     {
-      if (iter->_type == Chunk::POINT)
+      if (iter->_type == ChunkType::POINT)
       {
         points++;
 
@@ -224,7 +233,7 @@ private:
 
     while (iter != _chunks.end())
     {
-      if (iter->_type == Chunk::POINT)
+      if (iter->_type == ChunkType::POINT)
       {
         if (prev != _chunks.end() && calcDistance(prev->_lat, prev->_lon, iter->_lat, iter->_lon) < _simplifyDistance)
         {
@@ -251,18 +260,9 @@ private:
     std::cout << std::setprecision(8);
     while (p3 != _chunks.end())
     {
-      if (p3->_type == Chunk::POINT)
+      if (p3->_type == ChunkType::POINT)
       {
-#if 0
-        if (p1 != _chunks.end() &&
-            p2 != _chunks.end())
-        {
-          double crossTrack = fabs(calcCrosstrack(p1->_lat, p1->_lon, p3->_lat, p3->_lon, p2->_lat, p2->_lon));
-          std::cout << "P1:" << p1->_lat << "," << p1->_lon << " P3:" << p3->_lat << "," << p3->_lon << " P2:" << p2->_lat << "," << p2->_lon << ":" << crossTrack << std::endl;
-        }
-#endif
-        if (p1 != _chunks.end() &&
-            p2 != _chunks.end() &&
+        if (p1 != _chunks.end() && p2 != _chunks.end() &&
             fabs(calcCrosstrack(p1->_lat, p1->_lon, p3->_lat, p3->_lon, p2->_lat, p2->_lon)) < _simplifyCrossTrack)
         {
           _chunks.erase(p2);
@@ -288,14 +288,13 @@ private:
 
     while (p3 != _chunks.end())
     {
-      if (p3->_type == Chunk::POINT)
+      if (p3->_type == ChunkType::POINT)
       {
         points++;
 
         p3->_crossTrack = std::numeric_limits<double>::max();
 
-        if (p1 != _chunks.end() &&
-            p2 != _chunks.end())
+        if (p1 != _chunks.end() && p2 != _chunks.end())
         {
           p2->_crossTrack = fabs(calcCrosstrack(p1->_lat, p1->_lon, p3->_lat, p3->_lon, p2->_lat, p2->_lon));
         }
@@ -311,15 +310,11 @@ private:
 
   std::list<Chunk>::iterator forwards(std::list<Chunk>::iterator p)
   {
-    ++p;
-    while (p != _chunks.end())
+    do
     {
-      if (p->_type == Chunk::POINT)
-      {
-        break;
-      }
       ++p;
     }
+    while (p != _chunks.end() && p->_type != ChunkType::POINT);
 
     return p;
   }
@@ -328,8 +323,7 @@ private:
   {
     while (p != _chunks.begin())
     {
-      --p;
-      if (p->_type == Chunk::POINT)
+      if ((--p)->_type == ChunkType::POINT)
       {
         return p;
       }
@@ -344,8 +338,7 @@ private:
 
     for (auto p = _chunks.begin(); p != _chunks.end(); ++p)
     {
-      if (p->_type == Chunk::POINT &&
-          (lowest == _chunks.end() || lowest->_crossTrack > p->_crossTrack))
+      if (p->_type == ChunkType::POINT && (lowest == _chunks.end() || lowest->_crossTrack > p->_crossTrack))
       {
         lowest = p;
       }
@@ -355,7 +348,7 @@ private:
     {
       auto p2 = backwards(lowest);
       auto p1 = (p2 != _chunks.end() ? backwards(p2) : _chunks.end());
-
+      // p3 = lowest
       auto p4 = forwards(lowest);
       auto p5 = (p4 != _chunks.end() ? forwards(p4) : _chunks.end());
 
@@ -554,9 +547,9 @@ int main(int argc, char *argv[])
       std::cout << "Usage: gpxsim [-h] [-v] [-i] [-d <distance>] [-n <number> | -t <distance>] [-o <out.gpx>] <file.gpx>" << std::endl;
       std::cout << "  -h              help" << std::endl;
       std::cout << "  -v              show version" << std::endl;
-      std::cout << "  -i              report the results of the simplification" << std::endl;
+      std::cout << "  -i              report the results of the simplification (only with -o)" << std::endl;
       std::cout << "  -d <distance>   remove route or track points within distance of the previous point (in m)" << std::endl;
-      std::cout << "  -n <number>     remove route or track points until the route or track contains <number> points" << std::endl;
+      std::cout << "  -n <number>     remove route or track points until the route or track contains <number> points (2..)" << std::endl;
       std::cout << "  -x <distance>   remove route or track points with a cross track distance less than <distance> (in m)" << std::endl;
       std::cout << "  -o <out.gpx>    the output gpx file (overwrites existing file)" << std::endl;
       std::cout << " file.gpx         the input gpx file" << std::endl << std::endl;
@@ -590,7 +583,7 @@ int main(int argc, char *argv[])
     {
       int number = GpxSim::getInt(argv[++i]);
 
-      if (number > 0)
+      if (number >= 2)
       {
         gpxSim.setSimplifyToNumber(number);
       }
@@ -637,6 +630,8 @@ int main(int argc, char *argv[])
 
       if (outputFilename.empty())
       {
+        gpxSim.setVerbose(false);
+
         gpxSim.parseFile(stream, std::cout);
       }
       else
