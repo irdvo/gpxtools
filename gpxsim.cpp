@@ -9,6 +9,7 @@
 #include "XMLParser.h"
 
 const std::string version= "0.1.0";
+
 // ----------------------------------------------------------------------------
 
 class GpxSim : public XMLParserHandler
@@ -405,13 +406,13 @@ private:
     _path.append("/");
     _path.append(name);
 
-    if (_path == "/gpx/trk/trkseg")
+    if (_path == "/gpx/trk/trkseg" || _path == "/gpx/rte")
     {
       _current.clear();
 
       _inPoints = true;
     }
-    else if (_path == "/gpx/trk/trkseg/trkpt")
+    else if (_path == "/gpx/trk/trkseg/trkpt" || _path == "/gpx/rte/rtept")
     {
       if (!_current._text.empty()) _chunks.push_back(_current);
 
@@ -426,23 +427,23 @@ private:
 
   void doEndElement()
   {
-    if (_path == "/gpx/trk/trkseg")
+    if (_path == "/gpx/trk/trkseg" || _path == "/gpx/rte")
     {
       if (!_current._text.empty()) _chunks.push_back(_current);
 
-      if (_verbose) verboseChunks("Original  track segment:");
+      if (_verbose) verboseChunks("Original  segment:");
 
       if (_simplifyDistance > 0.0)   simplifyDistance();
       if (_simplifyCrossTrack > 0.0) simplifyCrossTrack();
       if (_simplifyToNumber > 0)     simplifyToNumber();
 
-      if (_verbose) verboseChunks("Optimized track segment:");
+      if (_verbose) verboseChunks("Optimized segment:");
 
       outputChunks();
 
       _inPoints = false;
     }
-    else if (_path == "/gpx/trk/trkseg/trkpt")
+    else if (_path == "/gpx/trk/trkseg/trkpt" || _path == "/gpx/rte/rtept")
     {
       _chunks.push_back(_current);
 

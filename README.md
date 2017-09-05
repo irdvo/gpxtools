@@ -69,3 +69,43 @@ Examples:
 Requirements:
   * [cmake](https://cmake.org/) for building
 
+## gpxsim
+
+A c++ tool for simplifing track segments or routes in a GPX file using the distance threshold and/or the
+Douglas-Peucker algorithm.
+
+Syntax:
+```
+  Usage: gpxsim [-h] [-v] [-i] [-d <distance>] [-n <number> | -t <distance>] [-o <out.gpx>] <file.gpx>
+    -h              help
+    -v              show version
+    -i              report the results of the simplification (only with -o)
+    -d <distance>   remove route or track points within distance of the previous point (in m)
+    -n <number>     remove route or track points until the route or track contains <number> points (2..)
+    -x <distance>   remove route or track points with a cross track distance less than <distance> (in m)
+    -o <out.gpx>    the output gpx file (overwrites existing file)
+   file.gpx         the input gpx file
+   
+    Simplify a route or track using the distance threshold and/or the Douglas-Peucker algorithm.
+```
+
+Examples:
+```
+  gpxsim -i -d 2 -o output.gpx track.gpx
+  
+    Simplify the routes and tracks segments in track.gpx by removing all points closer than 2 metres from 
+    its predecessor point and store the result in output.gpx. Report the result of the simplification.
+    
+  gpxsim -n 100 route.gpx
+  
+    Simplify the routes in route.gpx by removing points with the smallest crosstrack error until the routes 
+    contains 100 points. The resulting output is copied to the console.
+    
+  gpxsim -i -x 2.1 -o output.gpx track.gpx
+  
+    Simplify the tracks segments in track.gpx by removing points with a crosstrack error smaller than 2.1 metres.
+    Store the result in output.gpx and report the result of the simplification.
+```
+
+Requirements:
+  * [cmake](https://cmake.org/) for building
