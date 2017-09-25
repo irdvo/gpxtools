@@ -18,7 +18,8 @@ class GpxJson : public XMLParserHandler
 public:
   // -- Constructor -----------------------------------------------------------
   GpxJson() :
-    _mode(SEMI)
+    _mode(NORMAL),
+    _number(4)
   {
   }
 
@@ -29,9 +30,11 @@ public:
 
   // -- Properties ------------------------------------------------------------
 
-  enum Mode { COMPACT, SEMI, FULL };
+  enum Mode { COMPACT, NORMAL };
 
   void setMode(Mode mode) { _mode = mode; }
+
+  void setNumber(int number) { _number = number; }
 
   // -- Parse a file ----------------------------------------------------------
   bool parseFile(std::istream &input, std::ostream &output)
@@ -103,95 +106,112 @@ private:
   void outputOnePoint(std::ostream &output)
   {
     output << std::fixed << std::setprecision(6);
-    output << '{' << std::endl;
-    output << "  \"type\":\"Point\"," << std::endl;
-    output << "  \"coordinates\":[" << _points.front()._lon << ',' << _points.front()._lat << "]" << std::endl;
-    output << '}' << std::endl;
+    output << '{'; doEndl(output);
+    doIndent();
+    output << _indent << "\"type\":\"Point\","; doEndl(output);
+    output << _indent << "\"coordinates\":[" << _points.front()._lon << ',' << _points.front()._lat << "]"; doEndl(output);
+    doOutdent();
+    output << '}'; doEndl(output);
   }
 
   void outputMultiplePoints(std::ostream &output)
   {
     output << std::fixed << std::setprecision(6);
-    output << '{' << std::endl;
-    output << "  \"type\":\"MultiPoint\"," << std::endl;
-    output << "  \"coordinates\":[" << std::endl;
+    output << '{'; doEndl(output);
+    doIndent();
+    output << _indent << "\"type\":\"MultiPoint\","; doEndl(output);
+    output << _indent << "\"coordinates\":["; doEndl(output);
+    doIndent();
 
-    int count = 0;
-    for (auto iter = _points.begin(); iter != _points.end(); ++iter)
+    auto iter = _points.begin();
+    while (iter != _points.end())
     {
-      auto next = iter + 1;
+      output << _indent;
 
-      if (count == 0) output << "    ";
-
-      output << '[' << iter->_lon << ',' << iter->_lat << ']';
-
-      if (next != _points.end()) output << ',';
-
-      count++;
-      if (count == 4)
+      int count = 0;
+      while (iter != _points.end() && count < _number)
       {
-        output << std::endl;
-        count = 0;
+        auto next = iter + 1;
+
+        output << '[' << iter->_lon << ',' << iter->_lat << ']';
+
+        if (next != _points.end()) output << ',';
+
+        count++;
       }
+      doEndl(output);
+
+      ++iter;
     }
-    output << "  ]" << std::endl;
-    output << '}' << std::endl;
+
+    doOutdent();
+    output << _indent << "]"; doEndl(output);
+    doOutdent();
+    output << '}'; doEndl(output);
   }
 
   void outputOneLine(std::ostream &output)
   {
     output << std::fixed << std::setprecision(6);
-    output << '{' << std::endl;
-    output << "  \"type\":\"LineString\"," << std::endl;
-    output << "  \"coordinates\":[" << std::endl;
-
-    int count = 0;
+    output << '{'; doEndl(output);
+    doIndent();
+    output << _indent << "\"type\":\"LineString\","; doEndl(output);
+    output << _indent << "\"coordinates\":["; doEndl(output);
+    doIndent();
 
     auto iter = _lines.front().begin();
     auto end  = _lines.front().end();
 
-    for (; iter != end; ++iter)
+    while (iter != end)
     {
-      auto next = iter + 1;
+      output << _indent;
 
-      if (count == 0) output << "    ";
-
-      output << '[' << iter->_lon << ',' << iter->_lat << ']';
-
-      if (next != end) output << ',';
-
-      count++;
-      if (count == 4)
+      int count = 0;
+      while (iter != end && count < _number)
       {
-        output << std::endl;
-        count = 0;
+        auto next = iter + 1;
+
+        output << '[' << iter->_lon << ',' << iter->_lat << ']';
+
+        if (next != end) output << ',';
+
+        count++;
       }
+      doEndl(output);
+
+      ++iter;
     }
-    output << "  ]" << std::endl;
-    output << '}' << std::endl;
+
+    doOutdent();
+    output << _indent << "]"; doEndl(output);
+    doOutdent();
+    output << '}'; doEndl(output);
   }
 
   void outputMultipleLines(std::ostream &output)
   {
     output << std::fixed << std::setprecision(6);
-    output << '{' << std::endl;
-    output << "  \"type\":\"MultiLineString\"," << std::endl;
-    output << "  \"coordinates\":[" << std::endl;
+    output << '{'; doEndl(output);
+    doIndent();
+    output << _indent << "\"type\":\"MultiLineString\","; doEndl(output);
+    output << _indent << "\"coordinates\":["; doEndl(output);
+    doIndent();
 
-    output << "    ";
+    output << _indent;
     for (auto iter2 = _lines.begin(); iter2 != _lines.end(); ++iter2)
     {
       auto next2 = iter2 + 1;
 
-      output << "[" << std::endl;
+      output << "["; doEndl(output);
+      doIndent();
 
       auto iter = iter2->begin();
       while (iter != iter2->end())
       {
-        output << "      ";
+        output << _indent;
 
         int count = 0;
-        while (iter != iter2->end() && count < 4)
+        while (iter != iter2->end() && count < _number)
         {
           auto next = iter + 1;
 
@@ -201,15 +221,35 @@ private:
 
           ++iter; count++;
         }
-        output << std::endl;
+        doEndl(output);
       }
+      doOutdent();
 
-      output << "    ]";
+      output << _indent << "]";
       if (next2 != _lines.end()) output << ",";
     }
-    output << std::endl;
-    output << "  ]" << std::endl;
-    output << "}" << std::endl;
+    doEndl(output);
+    doOutdent();
+
+    output << _indent << "]"; doEndl(output);
+    doOutdent();
+
+    output << "}"; doEndl(output);
+  }
+
+  void doEndl(std::ostream &output)
+  {
+    if (_mode == NORMAL) output << std::endl;
+  }
+
+  void doIndent()
+  {
+    if (_mode == NORMAL) _indent += "  ";
+  }
+
+  void doOutdent()
+  {
+    if (_mode == NORMAL) _indent.erase(_indent.size()-2);
   }
 
   static double getDoubleAttribute(const Attributes &atts, const std::string &key)
@@ -313,11 +353,14 @@ private:
   // Members
   std::string         _path;
   Mode                _mode;
+  int                 _number;
 
   Line                _line;
 
   std::vector<Line>   _lines;
   std::vector<Point>  _points;
+
+  std::string         _indent;
 };
 
 // -- Main program ------------------------------------------------------------
@@ -337,7 +380,8 @@ int main(int argc, char *argv[])
       std::cout << "Usage: " << tool << " [-h] [-v] [-m compact|semi|full] [-o <out.json] [<file.gpx>]" << std::endl;
       std::cout << "  -h                   help" << std::endl;
       std::cout << "  -v                   show version" << std::endl;
-      std::cout << "  -m compact|semi|full set the output mode" << std::endl;
+      std::cout << "  -m compact|normal    set the output mode" << std::endl;
+      std::cout << "  -n <number>          set the number of points per line (in normal mode) (def. 4)" << std::endl;
       std::cout << "  -o <out.json>        the output json file (overwrites existing file)" << std::endl;
       std::cout << " file.gpx              the input gpx file" << std::endl << std::endl;
       std::cout << "   Convert a gpx file to GeoJson." << std::endl;
@@ -355,18 +399,27 @@ int main(int argc, char *argv[])
       {
         gpxJson.setMode(GpxJson::COMPACT);
       }
-      else if (strcmp(argv[i], "semi") == 0)
+      else if (strcmp(argv[i], "normal") == 0)
       {
-        gpxJson.setMode(GpxJson::SEMI);
-      }
-      else if (strcmp(argv[i], "full") == 0)
-      {
-        gpxJson.setMode(GpxJson::FULL);
+        gpxJson.setMode(GpxJson::NORMAL);
       }
       else
       {
         std::cerr << "Error: unknown mode: " << argv[i] << std::endl;
         return 1;
+      }
+    }
+    else if (strcmp(argv[i], "-n") == 0 && i+1 < argc)
+    {
+      int number = GpxJson::getInt(argv[++i]);
+
+      if (number > 0)
+      {
+        gpxJson.setNumber(number);
+      }
+      else
+      {
+        std::cerr << "Error: invalid number: " << argv[i] << std::endl;
       }
     }
     else if (strcmp(argv[i], "-o") == 0 && i+1 < argc)
