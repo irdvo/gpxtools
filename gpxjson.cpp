@@ -137,11 +137,9 @@ private:
 
         if (next != _points.end()) output << ',';
 
-        count++;
+        ++iter; count++;
       }
       doEndl(output);
-
-      ++iter;
     }
 
     doOutdent();
@@ -175,11 +173,9 @@ private:
 
         if (next != end) output << ',';
 
-        count++;
+        ++iter; count++;
       }
       doEndl(output);
-
-      ++iter;
     }
 
     doOutdent();
