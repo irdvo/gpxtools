@@ -18,6 +18,9 @@ class GpxJson : public XMLParserHandler
 public:
   // -- Constructor -----------------------------------------------------------
   GpxJson() :
+    _waypoints(false),
+    _tracks(false),
+    _routes(false),
     _mode(NORMAL),
     _number(4)
   {
@@ -35,6 +38,12 @@ public:
   void setMode(Mode mode) { _mode = mode; }
 
   void setNumber(int number) { _number = number; }
+
+  void convertWaypoints() { _waypoints = true; }
+
+  void convertTracks() { _tracks = true; }
+
+  void convertRoutes() { _routes = true; }
 
   // -- Parse a file ----------------------------------------------------------
   bool parseFile(std::istream &input, std::ostream &output)
@@ -261,18 +270,20 @@ private:
     _path.append("/");
     _path.append(name);
 
-    if (_path == "/gpx/trk/trkseg" || _path == "/gpx/rte")
+    if ((_tracks && _path == "/gpx/trk/trkseg") ||
+        (_routes && _path == "/gpx/rte"))
     {
       _line.clear();
     }
-    else if (_path == "/gpx/trk/trkseg/trkpt" || _path == "/gpx/rte/rtept")
+    else if ((_tracks && _path == "/gpx/trk/trkseg/trkpt") ||
+             (_routes && _path == "/gpx/rte/rtept"))
     {
       double lat = getDoubleAttribute(attributes, "lat");
       double lon = getDoubleAttribute(attributes, "lon");
 
       _line.push_back(Point(lat, lon));
     }
-    else if (_path == "/gpx/wpt")
+    else if (_waypoints && _path == "/gpx/wpt")
     {
       double lat = getDoubleAttribute(attributes, "lat");
       double lon = getDoubleAttribute(attributes, "lon");
@@ -283,7 +294,8 @@ private:
 
   void doEndElement()
   {
-    if (_path == "/gpx/trk/trkseg" || _path == "/gpx/rte")
+    if ((_tracks && _path == "/gpx/trk/trkseg") ||
+        (_routes && _path == "/gpx/rte"))
     {
       _lines.push_back(_line);
     }
@@ -303,7 +315,7 @@ public:
   {
   }
 
-  virtual void docTypeDecl(const std::string &text)
+  virtual void docTypeDecl(const std::string &)
   {
   }
 
@@ -333,7 +345,7 @@ public:
     doStartElement(name, attributes);
   }
 
-  virtual void text(const std::string &text)
+  virtual void text(const std::string &)
   {
   }
 
@@ -348,6 +360,11 @@ private:
 
   // Members
   std::string         _path;
+
+  bool                _waypoints;
+  bool                _tracks;
+  bool                _routes;
+
   Mode                _mode;
   int                 _number;
 
@@ -373,9 +390,12 @@ int main(int argc, char *argv[])
   {
     if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "-?") == 0)
     {
-      std::cout << "Usage: " << tool << " [-h] [-v] [-m compact|semi|full] [-o <out.json] [<file.gpx>]" << std::endl;
+      std::cout << "Usage: " << tool << " [-h] [-v] [-w] [-r] [-t] [-m compact|normal] [-n <number>] [-o <out.json>] [<file.gpx>]" << std::endl;
       std::cout << "  -h                   help" << std::endl;
       std::cout << "  -v                   show version" << std::endl;
+      std::cout << "  -w                   convert the waypoints" << std::endl;
+      std::cout << "  -t                   convert the tracks" << std::endl;
+      std::cout << "  -r                   convert the routes" << std::endl;
       std::cout << "  -m compact|normal    set the output mode" << std::endl;
       std::cout << "  -n <number>          set the number of points per line (in normal mode) (def. 4)" << std::endl;
       std::cout << "  -o <out.json>        the output json file (overwrites existing file)" << std::endl;
@@ -387,6 +407,18 @@ int main(int argc, char *argv[])
     {
       std::cout << tool << " v" << version << std::endl;
       return 0;
+    }
+    else if (strcmp(argv[i], "-w") == 0)
+    {
+      gpxJson.convertWaypoints();
+    }
+    else if (strcmp(argv[i], "-t") == 0)
+    {
+      gpxJson.convertTracks();
+    }
+    else if (strcmp(argv[i], "-r") == 0)
+    {
+      gpxJson.convertRoutes();
     }
     else if (strcmp(argv[i], "-m") == 0 && i+1 < argc)
     {
