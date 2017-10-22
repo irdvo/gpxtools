@@ -109,3 +109,44 @@ Examples:
 
 Requirements:
   * [cmake](https://cmake.org/) for building
+
+## gpxjson
+
+A c++ tool for converting the waypoints, routes and/or tracks in a GPX file to GeoJson file.
+
+Syntax:
+```
+  Usage: gpxjson [-h] [-v] [-w] [-r] [-t] [-m compact|normal] [-n <number>] [-o <out.json>] [<file.gpx>]
+    -h                   help
+    -v                   show version
+    -w                   convert the waypoints
+    -t                   convert the tracks
+    -r                   convert the routes
+    -m compact|normal    set the output mode
+    -n <number>          set the number of points per line (in normal mode) (def. 4)
+    -o <out.json>        the output json file (overwrites existing file)
+   file.gpx              the input gpx file
+
+     Convert a gpx file to GeoJson.
+```
+
+Examples:
+```
+  gpxjson -w -m compact -o output.json track.gpx
+  
+    Convert the waypoins in the track.gpx file to Multipoints in the output.json file. All points are on the 
+    same line (compact mode).
+    
+  gpxjson -t -m normal -n -o output.json track.gpx
+  
+    Convert the track points in the track.gpx to MultiLinestrings in the output.json file. All points are grouped
+    by 6 per line (normal mode).
+    
+  gpxjson -r -m normal 
+  
+    Read the track points from standard in and convert them to MultiLinestrings that are written to standard out in
+    normal mode (4 points per line).
+```
+
+Requirements:
+  * [cmake](https://cmake.org/) for building
