@@ -13,3 +13,6 @@ target_link_libraries(gpxsim)
 
 add_executable(gpxjson gpxjson.cpp XMLParser.cpp)
 target_link_libraries(gpxjson)
+
+add_executable(gpxformat gpxformat.cpp)
+target_link_libraries(gpxformat)

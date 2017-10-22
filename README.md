@@ -112,7 +112,7 @@ Requirements:
 
 ## gpxjson
 
-A c++ tool for converting the waypoints, routes and/or tracks in a GPX file to GeoJson file.
+A c++ tool for converting the waypoints, routes and/or tracks in a GPX file to a GeoJson file.
 
 Syntax:
 ```
@@ -139,13 +139,13 @@ Examples:
     
   gpxjson -t -m normal -n -o output.json track.gpx
   
-    Convert the track points in the track.gpx to MultiLinestrings in the output.json file. All points are grouped
-    by 6 per line (normal mode).
+    Convert the track points in the track.gpx to MultiLinestrings in the output.json file. All points are 
+    grouped by 6 per line (normal mode).
     
   gpxjson -r -m normal 
   
-    Read the track points from standard in and convert them to MultiLinestrings that are written to standard out in
-    normal mode (4 points per line).
+    Read the track points from standard in and convert them to MultiLinestrings that are written to 
+    standard out in normal mode (4 points per line).
 ```
 
 Requirements:
