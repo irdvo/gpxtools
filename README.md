@@ -150,3 +150,40 @@ Examples:
 
 Requirements:
   * [cmake](https://cmake.org/) for building
+
+## gpxformat
+
+A c++ tool for formatting gpx coordinates and optionally showing the location in a browser.
+
+Syntax:
+```
+  Usage: gpxformat [-h] [-v] [-b browser] "<lat>,<lon>" ..
+    -h                   help
+    -v                   show version
+    -b browser           set the browser (def. none)
+    "lat, lon"           the gps coordinates
+
+     Show all formats for gps coordinates and optional the location in a browser.
+     
+  Examples for gps coordinate formats:
+           51.90540,     4.46660
+          -51.90540,    -4.46660
+        N 51 54.324,  E 4 27.996
+        51 54.324 S,  4 27.996 W
+       N 51 54 19.4, E 4 27 59.8
+       51 54 19.4 S, 4 27 59.8 W
+```
+
+Examples:
+```
+  gpxformat "51.90540,4.46660"
+  
+    Show all formats for the gps coordinates 51.90540,4.46660.
+    
+  gpxformat -b firefox "51 54.324 N,4 27.996 E"
+  
+    Show all formats for the gps coordinates 51 54.324 N,4 27.996 E and show the location in the browser.
+```
+
+Requirements:
+  * [cmake](https://cmake.org/) for building

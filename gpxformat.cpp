@@ -1,4 +1,5 @@
 #include <iostream>
+#include <sstream>
 #include <cstring>
 #include <cctype>
 #include <iomanip>
@@ -188,8 +189,6 @@ void output(double latitude, double longitude, const std::string &browser)
         << "&mlon=" << longitude
         << "#map=16/" << std::setprecision(4) << latitude << "/" << longitude << "\"";
 
-    std::cout << cmd.str() << std::endl;
-
     system(cmd.str().c_str());
   }
 }
@@ -228,16 +227,19 @@ int main(int argc, char *argv[])
   {
     if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "-?") == 0)
     {
-      std::cout << "Usage: " << tool << " [-h] [-v] [-b browser] \"<lat>,<lon>\"" << std::endl;
+      std::cout << "Usage: " << tool << " [-h] [-v] [-b browser] \"<lat>,<lon>\" .." << std::endl;
       std::cout << "  -h                   help" << std::endl;
       std::cout << "  -v                   show version" << std::endl;
       std::cout << "  -b browser           set the browser (def. none)" << std::endl;
-      std::cout << "  \"lat, lon\"..       the gps coordinates" << std::endl << std::endl;
-      std::cout << "   Show all formats for gps coordinates and optional the location in a browser." << std::endl;
+      std::cout << "  \"lat, lon\"           the gps coordinates" << std::endl << std::endl;
+      std::cout << "   Show all formats for gps coordinates and optional the location in a browser." << std::endl << std::endl;
       std::cout << "Examples for gps coordinate formats:" << std::endl;
-      std::cout << "    51.90540,     4.46660" << std::endl;
-      std::cout << "  N 51 54.324,  E 4 27.996" << std::endl;
-      std::cout << "  N 51 54 19.4, E 4 27 59.8" << std::endl;
+      std::cout << "         51.90540,     4.46660" << std::endl;
+      std::cout << "        -51.90540,    -4.46660" << std::endl;
+      std::cout << "      N 51 54.324,  E 4 27.996" << std::endl;
+      std::cout << "      51 54.324 S,  4 27.996 W" << std::endl;
+      std::cout << "     N 51 54 19.4, E 4 27 59.8" << std::endl;
+      std::cout << "     51 54 19.4 S, 4 27 59.8 W" << std::endl;
       return 0;
     }
     else if (strcmp(argv[i], "-v") == 0)
