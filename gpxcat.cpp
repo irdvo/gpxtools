@@ -18,10 +18,7 @@ class GpxCat : public XMLParserHandler
 public:
   // -- Constructor -----------------------------------------------------------
   GpxCat() :
-    _doWaypoints(false),
-    _doRoutes(false),
-    _doTracks(false),
-    _doSegments(-1.0)
+    _distance(-1.0)
   {
   }
 
@@ -32,13 +29,7 @@ public:
 
   // -- Properties ------------------------------------------------------------
 
-  void setWaypoints(bool waypoints) { _doWaypoints = waypoints; }
-
-  void setRoutes(bool routes) { _doRoutes = routes; }
-
-  void setTracks(bool tracks) { _doTracks = tracks; }
-
-  void setSegments(double distance) { _doSegments = distance; }
+  void setDistance(double distance) { _distance = distance; }
 
   // -- Parse a file ----------------------------------------------------------
   bool parseFile(std::istream &input)
@@ -266,10 +257,7 @@ public:
 private:
 
   // Members
-  bool              _doWaypoints;
-  bool              _doRoutes;
-  bool              _doTracks;
-  double            _doSegments;
+  double            _distance;
 
   std::string       _path;
 
@@ -293,12 +281,9 @@ int main(int argc, char *argv[])
       std::cout << "Usage: " << tool << " [-h] [-v] [-w] [-r] [-t] [-s <distance>] [-o <out.gpx>] <file.gpx> .." << std::endl;
       std::cout << "  -h              help" << std::endl;
       std::cout << "  -v              show version" << std::endl;
-      std::cout << "  -w              concatenate the waypoints" << std::endl;
-      std::cout << "  -r              concatenate the routes" << std::endl;
-      std::cout << "  -t              concatenate the tracks" << std::endl;
-      std::cout << "  -s <distance>   concatenate the track segments if the distance between the two segments is less than <distance> " << std::endl;
+      std::cout << "  -d <distance>   concatenate only if the segments are within this distance (metres) " << std::endl;
       std::cout << " file.gpx         the input gpx file" << std::endl << std::endl;
-      std::cout << "   Concatenate the waypoints, routes, tracks and/or segments in the input files." << std::endl;
+      std::cout << "   Concatenate the track segments in the input file." << std::endl;
       return 0;
     }
     else if (strcmp(argv[i], "-v") == 0)
@@ -306,31 +291,19 @@ int main(int argc, char *argv[])
       std::cout << tool << " v" << version << std::endl;
       return 0;
     }
-    else if (strcmp(argv[i], "-s") == 0 && i+1 < argc)
+    else if (strcmp(argv[i], "-d") == 0 && i+1 < argc)
     {
       double distance;
 
       if (GpxCat::getDouble(argv[++i], distance))
       {
-        gpxCat.setSegments(distance);
+        gpxCat.setDistance(distance);
       }
       else
       {
         std::cerr << "Error: invalid distance for option -s." << std::endl;
         return 1;
       }
-    }
-    else if (strcmp(argv[i], "-w") == 0)
-    {
-      gpxCat.setWaypoints(true);
-    }
-    else if (strcmp(argv[i], "-r") == 0)
-    {
-      gpxCat.setRoutes(true);
-    }
-    else if (strcmp(argv[i], "-t") == 0)
-    {
-      gpxCat.setTracks(true);
     }
     else if (strcmp(argv[i], "-o") == 0 && i+1 < argc)
     {
