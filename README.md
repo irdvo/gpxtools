@@ -187,3 +187,34 @@ Examples:
 
 Requirements:
   * [cmake](https://cmake.org/) for building
+
+## gpxcat
+
+A c++ tool for concatenating the track segments in a track in a GPX file. Output is written to standard output.
+
+Syntax:
+```
+   Usage: gpxcat [-h] [-v] [-d <distance>] <file.gpx> ..
+    -h              help
+    -v              show version
+    -d <distance>   concatenate only if the distance between the end and
+                    the start of the segments are less than distance (metres)
+   file.gpx         the input gpx file
+
+     Concatenate the segments in the track in the GPX input file.
+```
+
+Examples:
+```
+  gpxcat input.gpx
+  
+    All track segments are concatenated per track and written to standard output.
+    
+  gpxformat -d 12.0 input.gpx
+  
+    All track segments for which the distance between the end of the segment and the start
+    of the next segment is not bigger than the distance parameter are concatenated per track.
+```
+
+Requirements:
+  * [cmake](https://cmake.org/) for building

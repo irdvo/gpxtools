@@ -18,7 +18,8 @@ class GpxCat : public XMLParserHandler
 public:
   // -- Constructor -----------------------------------------------------------
   GpxCat() :
-    _distance(-1.0)
+    _distance(-1.0),
+    _doConcat(false)
   {
   }
 
@@ -31,6 +32,43 @@ public:
 
   void setDistance(double distance) { _distance = distance; }
 
+  // -- Process a file ----------------------------------------------------------
+  void processFile(const std::string &inputFilename)
+  {
+    std::ifstream stream(inputFilename.c_str());
+
+    if (stream.is_open())
+    {
+      parseFile(stream);
+
+      stream.close();
+    }
+  }
+
+  static bool getDoubleAttribute(const Attributes &atts, const std::string &key, double &value)
+  {
+    auto iter = atts.find(key);
+
+    if (iter == atts.end()) return false;
+
+    return getDouble(iter->second, value);
+  }
+
+  static bool getDouble(const std::string &str, double &value)
+  {
+    try
+    {
+      value = std::stod(str);
+
+      return true;
+    }
+    catch (...)
+    {
+      return false;
+    }
+  }
+
+private:
   // -- Parse a file ----------------------------------------------------------
   bool parseFile(std::istream &input)
   {
@@ -74,117 +112,59 @@ public:
     return c * R;
   }
 
-  static bool getDouble(const std::string &str, double &value)
-  {
-    try
-    {
-      value = std::stod(str);
-
-      return true;
-    }
-    catch (...)
-    {
-      return false;
-    }
-  }
-
-  void outputFile(std::ostream &output)
-  {
-    ChunkType last = ChunkType::POINT;
-
-    while (!_chunks.empty())
-    {
-      if (last != ChunkType::TEXT || _chunks.front()._type != ChunkType::TEXT)
-      {
-        output << _chunks.front()._text;
-      }
-
-      last = _chunks.front()._type;
-
-      _chunks.pop_front();
-    }
-  }
-
-private:
-  // Structs
-  enum ChunkType { TEXT, POINT };
-
-  struct Chunk
-  {
-    void clear()
-    {
-      _type       = TEXT;
-      _text.clear();
-      _lat        = 0.0;
-      _lon        = 0.0;
-      _crossTrack = std::numeric_limits<double>::max();
-    }
-
-    void point(double lat, double lon)
-    {
-      _type       = POINT;
-      _lat        = lat;
-      _lon        = lon;
-      _crossTrack = std::numeric_limits<double>::max();
-    }
-
-    ChunkType     _type;
-    std::string   _text;
-    double        _lat;
-    double        _lon;
-    double        _crossTrack;
-  };
-
   void store(const std::string &text)
   {
-    _current._text.append(text);
+    if (_doConcat)
+    {
+      _current.append(text);
+    }
+    else
+    {
+      std::cout << text;
+    }
   }
-
-
-  static bool getDoubleAttribute(const Attributes &atts, const std::string &key, double &value)
-  {
-    auto iter = atts.find(key);
-
-    if (iter == atts.end()) return false;
-
-    return getDouble(iter->second, value);
-  }
-
 
   void doStartElement(const std::string &name, const Attributes &attributes)
   {
     _path.append("/");
     _path.append(name);
 
-    if (_path == "/gpx/trk/trkseg" || _path == "/gpx/rte")
+    if (_path == "/gpx/trk/trkseg/trkpt")
     {
-      _current.clear();
-    }
-    else if (_path == "/gpx/trk/trkseg/trkpt" || _path == "/gpx/rte/rtept")
-    {
-      if (!_current._text.empty()) _chunks.push_back(_current);
+      double lat, lon = 0.0;
 
-      _current.clear();
+      if (getDoubleAttribute(attributes, "lat", lat) && getDoubleAttribute(attributes, "lon", lon))
+      {
+        if (_doConcat)
+        {
+          if (_distance >= 0.0 && calcDistance(_lastLat, _lastLon, lat, lon) > _distance)
+          {
+            std::cout << _current;
+          }
 
-      double lat, lon;
+          _doConcat = false;
+        }
 
-      getDoubleAttribute(attributes, "lat", lat);
-      getDoubleAttribute(attributes, "lon", lon);
-
-      _current.point(lat, lon);
+        _lastLat = lat;
+        _lastLon = lon;
+      }
     }
   }
 
   void doEndElement()
   {
-    if (_path == "/gpx/trk/trkseg" || _path == "/gpx/rte")
+    if (_path == "/gpx/trk")
     {
-      if (!_current._text.empty()) _chunks.push_back(_current);
-    }
-    else if (_path == "/gpx/trk/trkseg/trkpt" || _path == "/gpx/rte/rtept")
-    {
-      _chunks.push_back(_current);
+      if (_doConcat)
+      {
+        std::cout << _current;
 
+        _doConcat = false;
+      }
+    }
+    else if (_path == "/gpx/trk/trkseg")
+    {
+      _doConcat = true;
       _current.clear();
     }
 
@@ -230,9 +210,9 @@ public:
   {
     doStartElement(name, attributes);
 
-    store(text);
-
     doEndElement();
+
+    store(text);
   }
 
   virtual void startElement(const std::string &text, const std::string &name, const Attributes &attributes)
@@ -249,20 +229,20 @@ public:
 
   virtual void endElement(const std::string &text, const std::string &)
   {
-    store(text);
-
     doEndElement();
+
+    store(text);
   }
 
 private:
-
   // Members
   double            _distance;
 
   std::string       _path;
-
-  Chunk             _current;
-  std::list<Chunk>  _chunks;
+  std::string       _current;
+  double            _lastLat;
+  double            _lastLon;
+  bool              _doConcat;
 };
 
 // -- Main program ------------------------------------------------------------
@@ -271,19 +251,18 @@ int main(int argc, char *argv[])
 {
   GpxCat gpxCat;
 
-  std::string outputFilename;
-
   int i = 1;
   while (i < argc)
   {
     if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "-?") == 0)
     {
-      std::cout << "Usage: " << tool << " [-h] [-v] [-w] [-r] [-t] [-s <distance>] [-o <out.gpx>] <file.gpx> .." << std::endl;
+      std::cout << "Usage: " << tool << " [-h] [-v] [-d <distance>] <file.gpx> .." << std::endl;
       std::cout << "  -h              help" << std::endl;
       std::cout << "  -v              show version" << std::endl;
-      std::cout << "  -d <distance>   concatenate only if the segments are within this distance (metres) " << std::endl;
+      std::cout << "  -d <distance>   concatenate only if the distance between the end and" << std::endl;
+      std::cout << "                  the start of the segments are less than distance (metres)" << std::endl;
       std::cout << " file.gpx         the input gpx file" << std::endl << std::endl;
-      std::cout << "   Concatenate the track segments in the input file." << std::endl;
+      std::cout << "   Concatenate the segments in the track in the GPX input file." << std::endl;
       return 0;
     }
     else if (strcmp(argv[i], "-v") == 0)
@@ -305,23 +284,9 @@ int main(int argc, char *argv[])
         return 1;
       }
     }
-    else if (strcmp(argv[i], "-o") == 0 && i+1 < argc)
-    {
-      outputFilename = argv[++i];
-    }
     else if (argv[i][0] != '-')
     {
-      std::ifstream stream(argv[i]);
-
-      if (!stream.is_open())
-      {
-        std::cerr << "Error: unable to open: " << argv[i] << std::endl;
-        return 1;
-      }
-
-      gpxCat.parseFile(stream);
-
-      stream.close();
+      gpxCat.processFile(argv[i]);
     }
     else
     {
@@ -330,27 +295,6 @@ int main(int argc, char *argv[])
     }
 
     i++;
-  }
-
-  if (outputFilename.empty())
-  {
-    gpxCat.outputFile(std::cout);
-  }
-  else
-  {
-    std::ofstream output(outputFilename.c_str());
-
-    if (output.is_open())
-    {
-      gpxCat.outputFile(output);
-
-      output.close();
-    }
-    else
-    {
-      std::cerr << "Error: unable to open the outputfile: " << outputFilename << std::endl;
-      return 1;
-    }
   }
 
   return 0;
