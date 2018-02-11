@@ -19,3 +19,6 @@ target_link_libraries(gpxformat)
 
 add_executable(gpxcat gpxcat.cpp XMLParser.cpp)
 target_link_libraries(gpxcat)
+
+add_executable(gpxsplit gpxsplit.cpp XMLParser.cpp)
+target_link_libraries(gpxsplit)
