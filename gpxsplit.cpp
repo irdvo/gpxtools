@@ -1,7 +1,7 @@
 #include <iostream>
 #include <cstring>
 #include <fstream>
-#include <vector>
+#include <list>
 #include <cmath>
 #include <ctime>
 #include <limits>
@@ -19,8 +19,9 @@ class GpxSplit : public XMLParserHandler
 public:
   // -- Constructor -----------------------------------------------------------
   GpxSplit() :
-    _inPoint(false),
     _outputFile(&std::cout),
+    _inTrkSeg(false),
+    _inTime(false),
     _analyse(false),
     _time(-1),
     _distance(-1)
@@ -80,33 +81,32 @@ public:
 
 private:
   // -- Types -----------------------------------------------------------------
-  struct Point
-  {
-    Point()
-    {
-      _lat = 0.0;
-      _lon = 0.0;
-      _time = -1;
-      _text = "";
-    }
-    Point(const std::string &text, double lat, double lon)
-    {
-      _lat  = lat;
-      _lon  = lon;
-      _time = -1;
-      _text = text;
-    }
-    double             _lat;
-    double             _lon;
-    time_t             _time;
-    std::string        _text;
-  };
+  enum ChunkType { TEXT, POINT };
 
-  struct Segment
+  struct Chunk
   {
-    std::string        _start;
-    std::vector<Point> _points;
-    std::string        _end;
+    void clear()
+    {
+      _type       = TEXT;
+      _text.clear();
+      _lat        = 0.0;
+      _lon        = 0.0;
+      _time       = "";
+    }
+
+    void point(double lat, double lon)
+    {
+      _type       = POINT;
+      _lat        = lat;
+      _lon        = lon;
+      _time       = "";
+    }
+
+    ChunkType     _type;
+    std::string   _text;
+    double        _lat;
+    double        _lon;
+    std::string   _time;
   };
 
   // -- Methods ---------------------------------------------------------------
@@ -119,45 +119,74 @@ private:
 
   void store(const std::string &text)
   {
-    //if (_inPoints)
-    //{
-    //  _current._text.append(text);
-    //}
-    //else
+    if (_inTrkSeg)
+    {
+      _current._text.append(text);
+    }
+    else
     {
       *_outputFile << text;
     }
   }
 
-  void doStartElement(const std::string &name, const Attributes &attributes)
+  void doStartElement(const std::string &text, const std::string &name, const Attributes &attributes)
   {
     _path.append("/");
     _path.append(name);
 
     if (_path == "/gpx/trk/trkseg")
     {
-      _segment._points.clear();
+      _current.clear();
+
+      _inTrkSeg = true;
     }
     else if (_path == "/gpx/trk/trkseg/trkpt")
     {
+      if (!_current._text.empty()) _chunks.push_back(_current);
+
+      _current.clear();
+
       double lat = getDoubleAttribute(attributes, "lat");
       double lon = getDoubleAttribute(attributes, "lon");
 
-      _point._lat = lat;
-      _point._lon = lon;
-      _point._text = ""; // TODO: text;
-      _point._time = -1;
-
-      _inPoint = true;
+      _current.point(lat, lon);
+    }
+    else if (_path == "/gpx/trk/trkseg/trkpt/time")
+    {
+      // <time>2012-12-03T13:13:38Z</time>
+      _inTime = true;
     }
   }
 
-  void doEndElement()
+  void doEndElement(const std::string &text)
   {
-    if (_path == "/gpx/trk/trkseg/trkpt")
+    if (_path == "/gpx/trk/trkseg")
     {
-      _segment._points.push_back(_point);
-      _inPoint = false;
+      if (!_current._text.empty()) _chunks.push_back(_current);
+
+      if (_analyse)
+      {
+        //TODO: analyseChunks();
+      }
+      else
+      {
+        if (_distance > 0.0)   ; //TODO: splitByDistance();
+        if (_time     > 0)     ; //TODO: splitByTime();
+      }
+
+      //TODO: outputChunks();
+
+      _inTrkSeg = false;
+    }
+    else if (_path == "/gpx/trk/trkseg/trkpt")
+    {
+      _chunks.push_back(_current);
+
+      _current.clear();
+    }
+    else if (_path == "/gpx/trk/trkseg/trkpt/time")
+    {
+      _inTime = false;
     }
 
     size_t i =  _path.find_last_of('/');
@@ -200,22 +229,26 @@ public:
 
   virtual void startEndElement(const std::string &text, const std::string &name, const Attributes &attributes)
   {
-    doStartElement(name, attributes);
+    doStartElement(text, name, attributes);
 
     store(text);
 
-    doEndElement();
+    doEndElement(text);
   }
 
   virtual void startElement(const std::string &text, const std::string &name, const Attributes &attributes)
   {
-    doStartElement(name, attributes);
+    doStartElement(text, name, attributes);
 
     store(text);
   }
 
   virtual void text(const std::string &text)
   {
+    if (_inTime)
+    {
+      _current._time.append(text);
+    }
     store(text);
   }
 
@@ -223,18 +256,19 @@ public:
   {
     store(text);
 
-    doEndElement();
+    doEndElement(text);
   }
 
 private:
   // -- Members ---------------------------------------------------------------
   std::string         _path;
 
-  Segment             _segment;
-  Point               _point;
-  bool                _inPoint;
-
   std::ostream       *_outputFile;
+
+  bool                _inTrkSeg;
+  bool                _inTime;
+  Chunk               _current;
+  std::list<Chunk>    _chunks;
 
   bool                _analyse;
   time_t              _time;
