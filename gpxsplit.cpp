@@ -37,6 +37,8 @@ public:
 
   void setAnalyse(bool analyse) { _analyse = analyse; }
 
+  bool getAnalyse() { return _analyse; }
+
   void setDistance(double distance) { _distance = distance; }
 
   void setTime(time_t time) { _time = time; }
@@ -123,11 +125,76 @@ private:
     {
       _current._text.append(text);
     }
-    else
+    else if (!_analyse)
     {
       *_outputFile << text;
     }
   }
+
+  // http://www.movable-type.co.uk/scripts/latlong.html
+
+  static double deg2rad(double deg)
+  {
+    return (deg * M_PI) / 180.0;
+  }
+
+  static double calcDistance(double lat1deg, double lon1deg, double lat2deg, double lon2deg)
+  {
+    const double R = 6371E3; // m
+
+    double lat1rad = deg2rad(lat1deg);
+    double lon1rad = deg2rad(lon1deg);
+    double lat2rad = deg2rad(lat2deg);
+    double lon2rad = deg2rad(lon2deg);
+
+    double dlat    = lat2rad - lat1rad;
+    double dlon    = lon2rad - lon1rad;
+
+    double a       = sin(dlat / 2.0) * sin(dlat / 2.0) + cos(lat1rad) * cos(lat2rad) * sin(dlon / 2.0) * sin(dlon / 2.0);
+    double c       = 2.0 * atan2(sqrt(a), sqrt(1.0 - a));
+
+    return c * R;
+  }
+
+  void analyseChunks()
+  {
+    double lat;
+    double lon;
+
+    while (!_chunks.empty())
+    {
+      lat = _chunks.front()._lat;
+      lon = _chunks.front()._lon;
+
+      _chunks.pop_front();
+
+    }
+
+    while (!_chunks.empty())
+    {
+      if (_distance > 0.0)
+      {
+        double distance =  calcDistance(lat, lon, _chunks.front()._lat, _chunks.front()._lon);
+
+        if (distance > _distance)
+        {
+          std::cout << "Track segment " << 0 << " is split by distance " << distance << std::endl;
+        }
+      }
+    }
+    // TODO
+  }
+
+  void outputChunks()
+  {
+    while (!_chunks.empty())
+    {
+      *_outputFile << _chunks.front()._text;
+
+      _chunks.pop_front();
+    }
+  }
+
 
   void doStartElement(const std::string &text, const std::string &name, const Attributes &attributes)
   {
@@ -136,6 +203,8 @@ private:
 
     if (_path == "/gpx/trk/trkseg")
     {
+      _startTrkSeg = text;
+
       _current.clear();
 
       _inTrkSeg = true;
@@ -162,19 +231,18 @@ private:
   {
     if (_path == "/gpx/trk/trkseg")
     {
+      _endTrkSeg = text;
+
       if (!_current._text.empty()) _chunks.push_back(_current);
 
       if (_analyse)
       {
-        //TODO: analyseChunks();
+        analyseChunks();
       }
       else
       {
-        if (_distance > 0.0)   ; //TODO: splitByDistance();
-        if (_time     > 0)     ; //TODO: splitByTime();
+        outputChunks();
       }
-
-      //TODO: outputChunks();
 
       _inTrkSeg = false;
     }
@@ -267,6 +335,8 @@ private:
 
   bool                _inTrkSeg;
   bool                _inTime;
+  std::string         _startTrkSeg;
+  std::string         _endTrkSeg;
   Chunk               _current;
   std::list<Chunk>    _chunks;
 
@@ -306,7 +376,14 @@ int main(int argc, char *argv[])
     }
     else if (strcmp(argv[i], "-a") == 0)
     {
-      gpxSplit.setAnalyse(true);
+      if (!outputFilename.empty())
+      {
+        std::cerr << "Error: option -a only valid without output file."  << std::endl;
+      }
+      else
+      {
+        gpxSplit.setAnalyse(true);
+      }
     }
     else if (strcmp(argv[i], "-d") == 0 && i+1 < argc)
     {
@@ -337,7 +414,12 @@ int main(int argc, char *argv[])
     }
     else if (strcmp(argv[i], "-o") == 0 && i+1 < argc)
     {
-      if (outputFilename.empty())
+      if (gpxSplit.getAnalyse())
+      {
+        std::cerr << "Error: option -o is not valid for analyse mode." << std::endl;
+        return 1;
+      }
+      else if (outputFilename.empty())
       {
         outputFilename = argv[++i];
       }

@@ -137,7 +137,7 @@ Examples:
     Convert the waypoins in the track.gpx file to Multipoints in the output.json file. All points are on the 
     same line (compact mode).
     
-  gpxjson -t -m normal -n -o output.json track.gpx
+  gpxjson -t -m normal -n 6 -o output.json track.gpx
   
     Convert the track points in the track.gpx to MultiLinestrings in the output.json file. All points are 
     grouped by 6 per line (normal mode).
