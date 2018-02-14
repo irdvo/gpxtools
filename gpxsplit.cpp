@@ -6,6 +6,7 @@
 #include <ctime>
 #include <limits>
 #include <iomanip>
+#include <stdexcept>
 
 #include "XMLParser.h"
 
@@ -20,6 +21,8 @@ public:
   // -- Constructor -----------------------------------------------------------
   GpxSplit() :
     _outputFile(&std::cout),
+    _TrkNr(0),
+    _TrkSegNr(0),
     _inTrkSeg(false),
     _inTime(false),
     _analyse(false),
@@ -49,6 +52,9 @@ public:
     _path.clear();
 
     _outputFile = &output;
+
+    _TrkNr = 0;
+    _TrkSegNr = 0;
 
     XMLParser parser(this);
 
@@ -116,7 +122,16 @@ private:
   {
     auto iter = atts.find(key);
 
-    return iter != atts.end() ? getDouble(iter->second) : std::numeric_limits<double>::min();
+    if (iter == atts.end())
+    {
+      std::invalid_argument ex("Missing");
+
+      throw ex;
+    }
+    else
+    {
+      return std::stod(iter->second);
+    }
   }
 
   void store(const std::string &text)
@@ -138,6 +153,7 @@ private:
     return (deg * M_PI) / 180.0;
   }
 
+  // Distance in metres
   static double calcDistance(double lat1deg, double lon1deg, double lat2deg, double lon2deg)
   {
     const double R = 6371E3; // m
@@ -160,29 +176,41 @@ private:
   {
     double lat;
     double lon;
+    int    trkPtNr = 0;
 
-    while (!_chunks.empty())
+    auto iter = _chunks.begin();
+
+    for (; iter != _chunks.end(); ++iter)
     {
-      lat = _chunks.front()._lat;
-      lon = _chunks.front()._lon;
-
-      _chunks.pop_front();
-
-    }
-
-    while (!_chunks.empty())
-    {
-      if (_distance > 0.0)
+      if (iter->_type == POINT)
       {
-        double distance =  calcDistance(lat, lon, _chunks.front()._lat, _chunks.front()._lon);
-
-        if (distance > _distance)
-        {
-          std::cout << "Track segment " << 0 << " is split by distance " << distance << std::endl;
-        }
+        lat = iter->_lat;
+        lon = iter->_lon;
+        trkPtNr++;
+        break;
       }
     }
-    // TODO
+
+    for (++iter; iter != _chunks.end(); ++iter)
+    {
+      if (iter->_type == POINT)
+      {
+        trkPtNr++;
+
+        if (_distance > 0.0)
+        {
+          double distance =  calcDistance(lat, lon, iter->_lat, iter->_lon);
+
+          if (distance > _distance)
+          {
+            std::cout << "Track " << _TrkNr << " Segment " << _TrkSegNr << " Point " << trkPtNr << " is split by distance " << distance << "m (" << lat << ',' << lon << ")-(" << iter->_lat << ',' << iter->_lon << ")" << std::endl;
+          }
+        }
+
+        lat = iter->_lat;
+        lon = iter->_lon;
+      }
+    }
   }
 
   void outputChunks()
@@ -201,13 +229,19 @@ private:
     _path.append("/");
     _path.append(name);
 
-    if (_path == "/gpx/trk/trkseg")
+    if (_path == "/gpx/trk")
+    {
+      _TrkNr++;
+      _TrkSegNr = 0;
+    }
+    else if (_path == "/gpx/trk/trkseg")
     {
       _startTrkSeg = text;
 
       _current.clear();
 
       _inTrkSeg = true;
+      _TrkSegNr++;
     }
     else if (_path == "/gpx/trk/trkseg/trkpt")
     {
@@ -215,10 +249,13 @@ private:
 
       _current.clear();
 
-      double lat = getDoubleAttribute(attributes, "lat");
-      double lon = getDoubleAttribute(attributes, "lon");
-
-      _current.point(lat, lon);
+      try
+      {
+        _current.point(getDoubleAttribute(attributes, "lat"), getDoubleAttribute(attributes, "lon"));
+      }
+      catch(...)
+      {
+      }
     }
     else if (_path == "/gpx/trk/trkseg/trkpt/time")
     {
@@ -332,6 +369,9 @@ private:
   std::string         _path;
 
   std::ostream       *_outputFile;
+
+  int                 _TrkNr;
+  int                 _TrkSegNr;
 
   bool                _inTrkSeg;
   bool                _inTime;
