@@ -93,44 +93,48 @@ private:
 
   struct Chunk
   {
-    void clear()
+    Chunk()
     {
-      _type       = TEXT;
+      clear(TEXT);
+    }
+
+    void clear(ChunkType type)
+    {
+      _type       = type;
       _text.clear();
       _lat        = 0.0;
       _lon        = 0.0;
-      _time       = "";
-    }
-
-    void point(double lat, double lon)
-    {
-      _type       = POINT;
-      _lat        = lat;
-      _lon        = lon;
-      _time       = "";
+      _distance   = -1.0;
+      _timeStr.clear();
+      _time       = -1.0;
     }
 
     ChunkType     _type;
     std::string   _text;
     double        _lat;
     double        _lon;
-    std::string   _time;
+    double        _distance;
+    std::string   _timeStr;
+    time_t        _time;
   };
 
   // -- Methods ---------------------------------------------------------------
-  static double getDoubleAttribute(const Attributes &atts, const std::string &key)
+  static bool getDoubleAttribute(const Attributes &atts, const std::string &key, double &value)
   {
     auto iter = atts.find(key);
 
-    if (iter == atts.end())
-    {
-      std::invalid_argument ex("Missing");
+    if (iter == atts.end()) return false;
 
-      throw ex;
-    }
-    else
+    if (iter->second.empty()) return false;
+    try
     {
-      return std::stod(iter->second);
+      value = std::stod(iter->second);
+
+      return true;
+    }
+    catch(...)
+    {
+      return false;
     }
   }
 
@@ -144,6 +148,19 @@ private:
     {
       *_outputFile << text;
     }
+  }
+
+  void processTimeStr(std::string &timeStr, time_t &time)
+  {
+    timeStr = XMLParser::trim(timeStr);
+
+    if (timeStr.size() == 0) return;
+
+    struct tm tm;
+
+    if (strptime(timeStr.c_str(), "%Y-%m-%dT%TZ", &tm) == nullptr) return;
+
+    time = mktime(&tm);
   }
 
   // http://www.movable-type.co.uk/scripts/latlong.html
@@ -174,55 +191,35 @@ private:
 
   void analyseChunks()
   {
-    double lat;
-    double lon;
-    int    trkPtNr = 0;
+    int trkPtNr = 0;
 
-    auto iter = _chunks.begin();
+    Chunk previous;
 
-    for (; iter != _chunks.end(); ++iter)
-    {
-      if (iter->_type == POINT)
-      {
-        lat = iter->_lat;
-        lon = iter->_lon;
-        trkPtNr++;
-        break;
-      }
-    }
-
-    for (++iter; iter != _chunks.end(); ++iter)
+    for (auto iter = _chunks.begin(); iter != _chunks.end(); ++iter)
     {
       if (iter->_type == POINT)
       {
         trkPtNr++;
 
-        if (_distance > 0.0)
+        if (_distance > 0 && iter->_distance > _distance)
         {
-          double distance =  calcDistance(lat, lon, iter->_lat, iter->_lon);
-
-          if (distance > _distance)
+          if (_analyse)
           {
-            std::cout << "Track " << _TrkNr << " Segment " << _TrkSegNr << " Point " << trkPtNr << " is split by distance " << distance << "m (" << lat << ',' << lon << ")-(" << iter->_lat << ',' << iter->_lon << ")" << std::endl;
+            std::cout << "Track " << _TrkNr << " Segment " << _TrkSegNr << " Point " << trkPtNr << " is split by distance " << iter->_distance << "m (" << previous._lat << ',' << previous._lon << ")-(" << iter->_lat << ',' << iter->_lon << ")" << std::endl;
+          }
+          else
+          {
+            *_outputFile << _endTrkSeg;
+            *_outputFile << _startTrkSeg;
           }
         }
 
-        lat = iter->_lat;
-        lon = iter->_lon;
+        previous = *iter;
       }
+
+      if (!_analyse) *_outputFile << iter->_text;
     }
   }
-
-  void outputChunks()
-  {
-    while (!_chunks.empty())
-    {
-      *_outputFile << _chunks.front()._text;
-
-      _chunks.pop_front();
-    }
-  }
-
 
   void doStartElement(const std::string &text, const std::string &name, const Attributes &attributes)
   {
@@ -238,7 +235,9 @@ private:
     {
       _startTrkSeg = text;
 
-      _current.clear();
+      _chunks.clear();
+      _current.clear(TEXT);
+      _previous.clear(TEXT);
 
       _inTrkSeg = true;
       _TrkSegNr++;
@@ -247,20 +246,24 @@ private:
     {
       if (!_current._text.empty()) _chunks.push_back(_current);
 
-      _current.clear();
+      _current.clear(TEXT);
 
-      try
+      if (getDoubleAttribute(attributes, "lat", _current._lat) &&
+          getDoubleAttribute(attributes, "lon", _current._lon))
       {
-        _current.point(getDoubleAttribute(attributes, "lat"), getDoubleAttribute(attributes, "lon"));
-      }
-      catch(...)
-      {
+        _current._type = POINT;
+
+        if (_previous._type == POINT)
+        {
+          _current._distance = calcDistance(_previous._lat, _previous._lon, _current._lat, _current._lon);
+        }
       }
     }
     else if (_path == "/gpx/trk/trkseg/trkpt/time")
     {
       // <time>2012-12-03T13:13:38Z</time>
       _inTime = true;
+      _current._timeStr.clear();
     }
   }
 
@@ -272,26 +275,20 @@ private:
 
       if (!_current._text.empty()) _chunks.push_back(_current);
 
-      if (_analyse)
-      {
-        analyseChunks();
-      }
-      else
-      {
-        outputChunks();
-      }
+      analyseChunks();
 
       _inTrkSeg = false;
     }
     else if (_path == "/gpx/trk/trkseg/trkpt")
     {
       _chunks.push_back(_current);
-
-      _current.clear();
+      if (_current._type == POINT) _previous = _current;
+      _current.clear(TEXT);
     }
     else if (_path == "/gpx/trk/trkseg/trkpt/time")
     {
       _inTime = false;
+      processTimeStr(_current._timeStr, _current._time);
     }
 
     size_t i =  _path.find_last_of('/');
@@ -352,7 +349,7 @@ public:
   {
     if (_inTime)
     {
-      _current._time.append(text);
+      _current._timeStr.append(text);
     }
     store(text);
   }
@@ -378,6 +375,7 @@ private:
   std::string         _startTrkSeg;
   std::string         _endTrkSeg;
   Chunk               _current;
+  Chunk               _previous;
   std::list<Chunk>    _chunks;
 
   bool                _analyse;
@@ -443,7 +441,7 @@ int main(int argc, char *argv[])
     {
       struct tm fields;
 
-      if (strptime(argv[++i], "%Y-%m-%d %H:%M:%S", &fields) != NULL)
+      if (strptime(argv[++i], "%Y-%m-%d %H:%M:%S", &fields) != nullptr)
       {
         gpxSplit.setTime(mktime(&fields));
       }
