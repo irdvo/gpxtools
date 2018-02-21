@@ -46,6 +46,8 @@ public:
 
   void setTime(time_t time) { _time = time; }
 
+  void setDuration(int seconds) { _duration = seconds; }
+
   // -- Parse a file ----------------------------------------------------------
   bool parseFile(std::istream &input, std::ostream &output)
   {
@@ -199,13 +201,40 @@ private:
     {
       if (iter->_type == POINT)
       {
+        enum {NONE, DISTANCE, TIME, DURATION} reason = NONE;
+
         trkPtNr++;
 
         if (_distance > 0 && iter->_distance > _distance)
         {
+          reason = DISTANCE;
+        }
+        else if (_time > 0 && previous._time > 0 && iter->_time > 0 && previous._time <= _time && iter->_time > _time)
+        {
+          reason = TIME;
+        }
+        else if (_duration > 0 && previous._time > 0 && iter->_time > 0 && (iter->_time - previous._time) > _duration)
+        {
+          reason = DURATION;
+        }
+
+        if (reason != NONE)
+        {
           if (_analyse)
           {
-            std::cout << "Track " << _TrkNr << " Segment " << _TrkSegNr << " Point " << trkPtNr << " is split by distance " << iter->_distance << "m (" << previous._lat << ',' << previous._lon << ")-(" << iter->_lat << ',' << iter->_lon << ")" << std::endl;
+            std::cout << "Track:" << _TrkNr << " Segment:" << _TrkSegNr << " Point:" << trkPtNr << " is split on ";
+            switch(reason)
+            {
+              case DISTANCE:
+                std::cout << "distance:" << iter->_distance << "m (" << previous._lat << ',' << previous._lon << ") versus (" << iter->_lat << ',' << iter->_lon << ")" << std::endl;
+                break;
+              case TIME:
+                std::cout << "time:" << previous._timeStr << " versus " << iter->_timeStr << std::endl;
+                break;
+              case DURATION:
+                std::cout << "time duration " << previous._timeStr << " versus " << iter->_timeStr << std::endl;
+                break;
+            }
           }
           else
           {
@@ -381,6 +410,7 @@ private:
   bool                _analyse;
   time_t              _time;
   double              _distance;
+  int                 _duration;
 };
 
 // -- Main program ------------------------------------------------------------
@@ -396,12 +426,15 @@ int main(int argc, char *argv[])
   {
     if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "-?") == 0)
     {
-      std::cout << "Usage: " << tool << " [-h] [-v] [-a] [-d <distance>] [-t <time>] [-o <out.gpx>] [<file.gpx>]" << std::endl;
+      std::cout << "Usage: " << tool << " [-h] [-v] [-a] [-d <distance>] [-t \"<time>\"] [-s <seconds>] [-m <minutes>] [-u <hours>] [-o <out.gpx>] [<file.gpx>]" << std::endl;
       std::cout << "  -h                   help" << std::endl;
       std::cout << "  -v                   show version" << std::endl;
       std::cout << "  -a                   analyse the file for splitting" << std::endl;
       std::cout << "  -d <distance>        split based on distance in metres" << std::endl;
-      std::cout << "  -t <time>            split based on time, format: yyyy-mm-dd hh:mm:ss" << std::endl;
+      std::cout << "  -t \"<time>\"        split based on time, format: yyyy-mm-dd hh:mm:ss" << std::endl;
+      std::cout << "  -s <duration>        split based on time duration, in seconds" << std::endl;
+      std::cout << "  -m <duration>        split based on time duration, in minutes" << std::endl;
+      std::cout << "  -u <duration>        split based on time duration, in hours" << std::endl;
       std::cout << "  -o <out.gpx>         the output gpx file (overwrites existing file)" << std::endl;
       std::cout << " file.gpx              the input gpx file" << std::endl << std::endl;
       std::cout << "   Split the track segments in a gpx in multiple track segments based on distance or time." << std::endl;
@@ -448,6 +481,45 @@ int main(int argc, char *argv[])
       else
       {
         std::cerr << "Error: invalid date/time: " << argv[i] << std::endl;
+      }
+    }
+    else if (strcmp(argv[i], "-s") == 0 && i+1 < argc)
+    {
+      int seconds = GpxSplit::getInt(argv[++i]);
+
+      if (seconds > 0)
+      {
+        gpxSplit.setDuration(seconds);
+      }
+      else
+      {
+        std::cerr << "Error: invalid time duration: " << argv[i] << std::endl;
+      }
+    }
+    else if (strcmp(argv[i], "-m") == 0 && i+1 < argc)
+    {
+      int seconds = GpxSplit::getInt(argv[++i]) * 60;
+
+      if (seconds > 0)
+      {
+        gpxSplit.setDuration(seconds);
+      }
+      else
+      {
+        std::cerr << "Error: invalid time duration: " << argv[i] << std::endl;
+      }
+    }
+    else if (strcmp(argv[i], "-u") == 0 && i+1 << argc)
+    {
+      int seconds = GpxSplit::getInt(argv[++i]) * 3600;
+
+      if (seconds > 0)
+      {
+        gpxSplit.setDuration(seconds);
+      }
+      else
+      {
+        std::cerr << "Error: invalid time duration: " << argv[i] << std::endl;
       }
     }
     else if (strcmp(argv[i], "-o") == 0 && i+1 < argc)
