@@ -210,10 +210,53 @@ Examples:
   
     All track segments are concatenated per track and written to standard output.
     
-  gpxformat -d 12.0 input.gpx
+  gpxcat -d 12.0 input.gpx
   
     All track segments for which the distance between the end of the segment and the start
     of the next segment is not bigger than the distance parameter are concatenated per track.
+```
+
+Requirements:
+  * [cmake](https://cmake.org/) for building
+
+## gpxsplit
+
+A c++ tool for splitting a track segment in multiple track segements based on distance or time.
+
+Syntax:
+```
+  Usage: gpxsplit [-h] [-v] [-a] [-d <distance>] [-t "<time>"] [-s <seconds>] [-m <minutes>] [-u <hours>] [-o <out.gpx>] [<file.gpx>]
+    -h                   help
+    -v                   show version
+    -a                   analyse the file for splitting
+    -d <distance>        split based on distance in metres
+    -t "<time>"          split based on time, format: yyyy-mm-dd hh:mm:ss
+    -s <duration>        split based on time duration, in seconds
+    -m <duration>        split based on time duration, in minutes
+    -u <duration>        split based on time duration, in hours
+    -o <out.gpx>         the output gpx file (overwrites existing file)
+   file.gpx              the input gpx file
+
+     Split the track segments in a gpx in multiple track segments based on distance or time.
+```
+
+Examples:
+```
+  gpxsplit -a -d 4000 input.gpx
+  
+    Analyse the input.gpx file for splitting the track segments based on the distance between two track points.
+    If the distance is more than 4km a message is written. No output.gpx is written.
+    
+  gpxsplit -t "2018-01-01 14:30:20" -o output.gpx input.gpx
+  
+    Split the track segments in input.gpx. The segment is splitted based on time: points before the time and points after
+    the time. The splitted track segments are written to output.gpx
+    
+  gpxsplit -m 90 input.gpx
+  
+    The track points in the track segments in the input.gpx file are splitted based on the time duration between
+    two points. If this is more than 90 minutes, the track segment is splitted in two. Output is written to
+    standard out.
 ```
 
 Requirements:

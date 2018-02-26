@@ -27,7 +27,8 @@ public:
     _inTime(false),
     _analyse(false),
     _time(-1),
-    _distance(-1)
+    _distance(-1),
+    _duration(-1)
   {
   }
 
@@ -431,7 +432,7 @@ int main(int argc, char *argv[])
       std::cout << "  -v                   show version" << std::endl;
       std::cout << "  -a                   analyse the file for splitting" << std::endl;
       std::cout << "  -d <distance>        split based on distance in metres" << std::endl;
-      std::cout << "  -t \"<time>\"        split based on time, format: yyyy-mm-dd hh:mm:ss" << std::endl;
+      std::cout << "  -t \"<time>\"          split based on time, format: yyyy-mm-dd hh:mm:ss" << std::endl;
       std::cout << "  -s <duration>        split based on time duration, in seconds" << std::endl;
       std::cout << "  -m <duration>        split based on time duration, in minutes" << std::endl;
       std::cout << "  -u <duration>        split based on time duration, in hours" << std::endl;
