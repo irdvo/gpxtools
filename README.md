@@ -1,4 +1,7 @@
 # gpxtools
+
+This project is *discontinued* here. See [gpxtools](https://notabug.org/irdvo/gpxtools) for the continuation.
+
 A collection of c++ tools for using GPX files 
 
 ## gpxls
